@@ -1,0 +1,138 @@
+<!doctype html>
+<html>
+    <head>
+        <title>Test JS</title>
+        
+        <style>
+            .row .jquery
+            {
+                
+                background-color: #aaa;
+                
+                float: right;
+                
+                width: 2px;
+                height:2px;
+                
+                margin: 0.5px 0.5px 0 0;
+            }
+            .row .myway
+            {
+                
+                background-color: #ccc;
+                
+                float: left;
+                
+                width: 2px;
+                height:2px;
+                
+                margin: 0.5px 0.5px 0 0;
+            }
+            
+            .row.jquery
+            {
+                float: right;
+                width: 49%;
+                max-width: 49%;
+            }
+            .row.myWay
+            {
+                float: left;
+                width: 49%;
+                max-width: 49%;
+            }
+        </style>
+        
+        <script type="text/javascript" src="https://code.jquery.com/jquery-3.1.0.min.js"></script>
+        
+        <script type="text/javascript">
+            
+            var CREATE_ELEMENTS = 150000;
+            
+            var jqueryArea, mywayArea, outputJquery, outputMyway, changeCounter = 20;
+            var getRandRGB = function()
+            {
+                return "rgb("+parseInt(Math.random()*255)+","+parseInt(Math.random()*255)+", "+parseInt(Math.random()*255)+")";
+            },
+            jQueryTest = function()
+            {
+                var startDate = new Date();
+                var intervalCounter = 0,
+                     interval = window.setInterval(function()
+                {
+                    if(changeCounter < intervalCounter)
+                    {
+                        window.clearInterval(interval);
+                        
+                        var endDate = new Date();
+                
+                        outputJquery.innerHTML = "jQuery: "+CREATE_ELEMENTS+" elems in  "+(endDate-startDate);
+                    }
+                    
+                    $(".row .jquery").css("background-color", getRandRGB());
+                    
+                    intervalCounter++;
+                }, 50);
+                
+                
+            },
+            myWayTest = function()
+            {
+                var startDate = new Date();
+                var intervalCounter = 0,
+                     interval = window.setInterval(function()
+                {
+                    if(changeCounter < intervalCounter)
+                    {
+                        window.clearInterval(interval);
+                        
+                        var endDate = new Date();
+                
+                        outputMyway.innerHTML = "My Way: "+CREATE_ELEMENTS+" elems in "+(endDate-startDate);
+                    }
+                    
+                    document.styleSheets[0].cssRules[1].style["background-color"] = getRandRGB();
+                    
+                    intervalCounter++;
+                },50);
+                
+                
+            };
+            
+            window.onload = function()
+            {
+                var newElem;
+                for(var i = 0; i < CREATE_ELEMENTS; i++)
+                {
+                    newElem = document.createElement("div");
+                    newElem.setAttribute("class", "jquery");
+                    jqueryArea.appendChild(newElem);
+                    
+                    newElem = document.createElement("div");
+                    newElem.setAttribute("class", "myway");
+                    mywaArea.appendChild(newElem);
+                }
+            };
+        </script>
+    </head>
+    <body>
+        <button onclick="jQueryTest();">Test jQuery</button>
+        <button onclick="myWayTest();">Test My Way</button>
+        <div>
+            <span id="output_jquery"></span>
+            <br />
+            <span id="output_myway"></span>
+        </div>
+        
+        <div class="row jquery" id="jquery_area"></div> 
+        <div class="row myWay" id="myway_area"></div>
+        
+        <script>
+            outputJquery = document.getElementById("output_jquery");
+            outputMyway  = document.getElementById("output_myway");
+            
+            jqueryArea = document.getElementById("jquery_area");
+            mywaArea = document.getElementById("myway_area");
+        </script>
+    </body>
+</html>
