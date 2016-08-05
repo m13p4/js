@@ -101,6 +101,12 @@
             
             window.onload = function()
             {
+                outputJquery = document.getElementById("output_jquery");
+                outputMyway  = document.getElementById("output_myway");
+
+                jqueryArea = document.getElementById("jquery_area");
+                mywaArea = document.getElementById("myway_area");
+            
                 var newElem;
                 for(var i = 0; i < CREATE_ELEMENTS; i++)
                 {
@@ -126,13 +132,5 @@
         
         <div class="row jquery" id="jquery_area"></div> 
         <div class="row myWay" id="myway_area"></div>
-        
-        <script>
-            outputJquery = document.getElementById("output_jquery");
-            outputMyway  = document.getElementById("output_myway");
-            
-            jqueryArea = document.getElementById("jquery_area");
-            mywaArea = document.getElementById("myway_area");
-        </script>
     </body>
 </html>
