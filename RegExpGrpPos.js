@@ -1,3 +1,12 @@
+/**
+ * RegEx Matcher mit Positionsangabe
+ * 
+ * @version 1.0
+ *
+ * @author Pavel
+ * @copyright Pavel Meliantchenkov
+ */
+
 var RegExpGrpPos = function(regexp, posabsolute)
 {
     var myRegExp = regexp,
