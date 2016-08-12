@@ -1,6 +1,6 @@
 /**
  * cssController - Manipulation von CSS Eigenschaften über "document.styleSheets"
- *                 keine Iteration über die zu veränderten Elemente nötig.
+ *  ↳ CSSC         keine Iteration über die zu veränderten Elemente nötig.
  *                 Eigenschaften werden an der Klassen-Definition von CSS verändert.
  * 
  * @version 0.3a
