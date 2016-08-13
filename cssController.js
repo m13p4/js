@@ -47,17 +47,20 @@ var CSSC = cssController = (function()
         },
         addToIndex = function(cssRule)
         {
-            var saveObj = cssRule;
-            
             if("conditionText" in cssRule)
-                saveObj = new controller(cssRule, _this, true);
-            
-            if(!!index[cssRule.selectorText])
-                index[cssRule.selectorText].content.push(saveObj);
-            else if("conditionText" in cssRule)
-                index[cssRule.conditionText] = {'type':CSSC.cssCondition,"content":[saveObj]};
+            {
+            	if(!!index[cssRule.conditionText])
+            	    index[cssRule.selectorText].content.push(new controller(cssRule, _this, true));
+            	else
+                    index[cssRule.conditionText] = {'type':CSSC.cssCondition,"content":[new controller(cssRule, _this, true)]};
+            }
             else if("selectorText" in cssRule)
-                index[cssRule.selectorText] = {'type':CSSC.cssRule,"content":[saveObj]};
+            {
+            	if(!!index[cssRule.selectorText])
+            	    index[cssRule.selectorText].content.push(cssRule);
+            	else
+            	    index[cssRule.selectorText] = {'type':CSSC.cssRule,"content":[cssRule]};
+            }
         },
         getFromIndex = function(selector)
         {
@@ -180,19 +183,19 @@ var CSSC = cssController = (function()
         conditionWrapper = function(elems, selector)
         {
             return {
-		        'get': function(property)
-		        {
-		            var toReturn = "";
+                'get': function(property)
+                {
+                    var toReturn = "";
                     for(var i = 0; i < elems.length; i++)
                     {
                         toReturn = elems[i].get(property);
                     }
                     return toReturn;
-		        },
-		        'set': function(property, value)
-		        {
+                },
+                'set': function(property, value)
+                {
 		            
-		        }
+                }
             };
         },
 	cssc = function(selector)
@@ -211,7 +214,7 @@ var CSSC = cssController = (function()
         cssc.cssRule = 0;
         cssc.cssCondition = 1;
         
-        if(initOnRun)
+        if(!!initOnRun)
         {
             init();
         }
