@@ -3,7 +3,7 @@
  * |-CSSC          keine Iteration über die zu veränderten Elemente nötig.
  *                 Eigenschaften werden an der Klassen-Definition von CSS verändert.
  * 
- * @version 0.3a
+ * @version 0.4a
  *
  * @author Pavel
  * @copyright Pavel Meliantchenkov
@@ -15,12 +15,10 @@ var CSSC = cssController = (function()
     {
         //console.log("styleSheetsDOM:");
         //console.log(styleSheetsDOM);
-        this.cssRule = 0;
-        this.cssCondition = 1;
+        
             
         var index = {}, 
             isInit = false, 
-            styleSheetsDOM,
             ownStyleElem,
             _this = this;
 
@@ -57,7 +55,7 @@ var CSSC = cssController = (function()
             if(!!index[cssRule.selectorText])
                 index[cssRule.selectorText].content.push(saveObj);
             else if("conditionText" in cssRule)
-                index[cssRule.selectorText] = {'type':CSSC.cssCondition,"content":[saveObj]};
+                index[cssRule.conditionText] = {'type':CSSC.cssCondition,"content":[saveObj]};
             else if("selectorText" in cssRule)
                 index[cssRule.selectorText] = {'type':CSSC.cssRule,"content":[saveObj]};
         },
@@ -117,7 +115,7 @@ var CSSC = cssController = (function()
 
             addToIndex(ownStyleElem.sheet.cssRules[rulePos]);
         },
-        controllerObj = function(elems, selector)
+        controllerWrapper = function(elems, selector)
         {
             return {
                 'set': function(property, value)
@@ -178,26 +176,54 @@ var CSSC = cssController = (function()
                     }
                 }
             };
+        },
+        conditionWrapper = function(elems, selector)
+        {
+            return {
+		        'get': function(property)
+		        {
+		            var toReturn = "";
+                    for(var i = 0; i < elems.length; i++)
+                    {
+                        toReturn = elems[i].get(property);
+                    }
+                    return toReturn;
+		        },
+		        'set': function(property, value)
+		        {
+		            
+		        }
+            };
+        },
+	cssc = function(selector)
+        {
+            var elems = getFromIndex(selector);
+        
+            if(elems.type == CSSC.cssCondition)
+            {
+                return conditionWrapper(elems.content, selector);
+            }
+            else
+            {    
+                return controllerWrapper(elems.content, selector);
+            }
         };
+        cssc.cssRule = 0;
+        cssc.cssCondition = 1;
         
         if(initOnRun)
         {
             init();
         }
-        
-        return function(selector)
+        else
         {
-            var elems = getFromIndex(selector);
-            
-            if(elems.type == CSSC.cssCondition)
+            window.addEventListener("load", function()
             {
-                return elems.content;
-            }
-            else
-            {    
-                return controllerObj(elems.content, selector);
-            }
-        };
+                init();
+            });
+        }
+        
+        return cssc;
     };
     
     return new controller(document.styleSheets, null, false);
