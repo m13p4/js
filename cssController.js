@@ -11,6 +11,9 @@
 
 var CSSC = cssController = (function()
 {
+    this.cssRule = 0;
+    this.cssCondition = 1;
+    
     var controller = function(styleSheetsDOM, parent, initOnRun)
     {
         //console.log("styleSheetsDOM:");
@@ -42,37 +45,22 @@ var CSSC = cssController = (function()
         {
             for(var i = 0; i < cssRules.length; i++)
             {
-                if("selectorText" in cssRules[i])
-                {
-                    addToIndex(cssRules[i]);
-                }
-                else if("conditionText" in cssRules[i])
-                {
-                    addConditionToIndex(cssRules[i]);
-                }
+                addToIndex(cssRules[i]);
             }
         },
         addToIndex = function(cssRule)
         {
+            var saveObj = cssRule;
+            
+            if("conditionText" in cssRule)
+                saveObj = new controller(condition, _this, true);
+            
             if(!!index[cssRule.selectorText])
-            {
-                index[cssRule.selectorText].content.push(cssRule);
-            }
+                index[cssRule.selectorText].content.push(saveObj);
+            else if("conditionText" in cssRule)
+                index[cssRule.selectorText] = {'type':CSSC.cssCondition,"content":[saveObj]};
             else
-            {
-                index[cssRule.selectorText] = {'type':"rule","content":[cssRule]};
-            }
-        },
-        addConditionToIndex = function(condition)
-        {
-            //if(!!index[condition.conditionText])
-            //{
-            //    index[condition.conditionText].push(new controller(condition));
-            //}
-            //else
-            //{
-                index[condition.conditionText] = {'type':"condition","content":new controller(condition, _this, true)};
-            //}
+                index[cssRule.selectorText] = {'type':CSSC.cssRule,"content":[saveObj]};
         },
         getFromIndex = function(selector)
         {
