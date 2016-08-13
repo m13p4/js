@@ -38,7 +38,7 @@ var CSSC = cssController = (function()
                     indexCssRules(styleSheetsDOM[i].cssRules);
                 }
             }
-            
+            console.log(index);
             isInit = true;
         },
         indexCssRules = function(cssRules)
