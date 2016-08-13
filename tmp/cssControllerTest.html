@@ -1,0 +1,30 @@
+<!doctype html>
+<html>
+    <head>
+        <title>CSS Controller Test</title>
+        <style>
+            body
+            {
+                margin: 0;
+            }
+            .test
+            {
+                background: #ccc;
+                width: 100%;
+            }
+            @media screen and (max-width: 680px)
+            {
+                .test
+                {
+                    width: 50%;
+                }
+            }
+        </style>
+        <script type="text/javascript" src="./../cssController.js"></script>
+    </head>
+    <body>
+        <div id="div"></div>
+        <div id="div2"></div>
+        <div class="test">bin der test</div>
+    </body>
+</html>  
