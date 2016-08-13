@@ -11,14 +11,13 @@
 
 var CSSC = cssController = (function()
 {
-    this.cssRule = 0;
-    this.cssCondition = 1;
-    
     var controller = function(styleSheetsDOM, parent, initOnRun)
     {
         //console.log("styleSheetsDOM:");
         //console.log(styleSheetsDOM);
-        
+        this.cssRule = 0;
+        this.cssCondition = 1;
+    
         var index = {}, 
             isInit = false, 
             styleSheetsDOM,
