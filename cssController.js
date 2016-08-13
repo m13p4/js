@@ -15,7 +15,9 @@ var CSSC = cssController = (function()
     {
         //console.log("styleSheetsDOM:");
         //console.log(styleSheetsDOM);
-        
+        this.cssRule = 0;
+        this.cssCondition = 1;
+            
         var index = {}, 
             isInit = false, 
             styleSheetsDOM,
@@ -185,9 +187,6 @@ var CSSC = cssController = (function()
         
         return function(selector)
         {
-            this.cssRule = 0;
-            this.cssCondition = 1;
-        
             var elems = getFromIndex(selector);
             
             if(elems.type == CSSC.cssCondition)
