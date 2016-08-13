@@ -53,13 +53,13 @@ var CSSC = cssController = (function()
             var saveObj = cssRule;
             
             if("conditionText" in cssRule)
-                saveObj = new controller(condition, _this, true);
+                saveObj = new controller(cssRule, _this, true);
             
             if(!!index[cssRule.selectorText])
                 index[cssRule.selectorText].content.push(saveObj);
             else if("conditionText" in cssRule)
                 index[cssRule.selectorText] = {'type':CSSC.cssCondition,"content":[saveObj]};
-            else
+            else if("selectorText" in cssRule)
                 index[cssRule.selectorText] = {'type':CSSC.cssRule,"content":[saveObj]};
         },
         getFromIndex = function(selector)
@@ -190,7 +190,7 @@ var CSSC = cssController = (function()
         {
             var elems = getFromIndex(selector);
             
-            if(elems.type == "condition")
+            if(elems.type == CSSC.cssCondition)
             {
                 return elems.content;
             }
