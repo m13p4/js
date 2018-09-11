@@ -3,7 +3,7 @@
  * 
  * @version 1.0
  *
- * @author Pavel
+ * @author m13p4
  * @copyright Pavel Meliantchenkov
  */
 
