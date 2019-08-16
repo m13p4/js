@@ -8,7 +8,7 @@ function getRandomString(length)
 {
     var str = "";
     
-    while(str.length < length || 16)
+    while(str.length < (length||16))
         str += Math.random().toString(36).substr(2);
     
     return str.substr(0, length);
