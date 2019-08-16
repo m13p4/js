@@ -6,12 +6,11 @@
  */
 function getRandomString(length)
 {
-    length = length || 16;
-    
     var str = "";
     
-    while(str.length < length)
+    while(str.length < length || 16)
         str += Math.random().toString(36).substr(2);
     
     return str.substr(0, length);
 }
+typeof module !== "undefined" && (module.exports = getRandomString);
