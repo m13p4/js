@@ -11,9 +11,9 @@
 {
     const VERSION = "1.0.not_tested";
     const CONF = {
-        expTime:            1e3 * 20,
+        expTime:            1000 * 20,
         
-        defaultKeyLength:   1e2,
+        defaultKeyLength:   50,
         largestKeyLength:   255, // 0xff
         
         PORT: 12345
@@ -87,17 +87,21 @@
 
                     if(data instanceof Array && data.length > 0)
                     {
-                        let type = data[0] || "";
+                        let type = data[0] || ":";
                         let hash = data[1] || "";
-                        let sid  = data[2] || "";
+                        let sess = data[2] || "";
 
                         let res  = [];
 
+                        let _type = type.split(":");
+                        let call  = _type[1] ? ":"+_type[1] : "";
+                        type = _type[0] || "";
+
                         if(type === "new" && hash.length > 0)
                         {
-                            res.push("new");
+                            res.push("new"+call);
 
-                            let expTime = Number.isInteger(sid) && sid > 0 ? sid : _CONF.expTime;
+                            let expTime = Number.isInteger(sess) && sess > 0 ? sess : _CONF.expTime;
                             let keyLength = Number.isInteger(data[3]) && data[3] > 0 ? data[3] : _CONF.defaultKeyLength;
                             
                             if(keyLength > _CONF.largestKeyLength) keyLength = _CONF.largestKeyLength;
@@ -117,53 +121,53 @@
                             _sessions[newSession.key] = newSession;
                             res.push(newSession.key);
                         }
-                        else if(type === "check" && hash.length > 0 && sid.length > 0)
+                        else if(type === "check" && hash.length > 0 && sess.length > 0)
                         {
-                            res.push("check");
-                            res.push(checkSession(_sessions, sid, hash));
+                            res.push("check"+call);
+                            res.push(checkSession(_sessions, sess, hash));
                         }
-                        else if(type === "close" && hash.length > 0 && sid.length > 0)
+                        else if(type === "close" && hash.length > 0 && sess.length > 0)
                         {
-                            res.push("close");
+                            res.push("close"+call);
 
-                            if(checkSession(_sessions, sid, hash, true))
+                            if(checkSession(_sessions, sess, hash, true))
                             {
-                                _sessions[sid] = null;
-                                delete _sessions[sid];
+                                _sessions[sess] = null;
+                                delete _sessions[sess];
 
                                 res.push(true);
                             }
                             else res.push(false);
                         }
-                        else if(type === "set" && hash.length > 0 && sid.length > 0)
+                        else if(type === "set" && hash.length > 0 && sess.length > 0)
                         {
-                            res.push("set");
+                            res.push("set"+call);
                             res.push(false);
 
-                            if(checkSession(_sessions, sid, hash))
+                            if(checkSession(_sessions, sess, hash))
                             {
                                 let key = 3 in data ? data[3] : null;
                                 let val = 4 in data ? data[4] : null;
 
                                 if(typeof key !== "string") key = JSON.stringify(key);
 
-                                _sessions[sid]._var[key] = val;
+                                _sessions[sess]._var[key] = val;
                                 res[1] = true;
                             }
                         }
-                        else if(type === "get" && hash.length > 0 && sid.length > 0)
+                        else if(type === "get" && hash.length > 0 && sess.length > 0)
                         {
-                            res.push("get");
+                            res.push("get"+call);
 
                             let key = 3 in data ? data[3] : null;
                             let val = null;
 
-                            if(checkSession(_sessions, sid, hash))
+                            if(checkSession(_sessions, sess, hash))
                             {
                                 if(typeof key !== "string") key = JSON.stringify(key);
 
-                                if(key && _sessions[sid]._var[key])
-                                    val = _sessions[sid]._var[key];
+                                if(key && _sessions[sess]._var[key])
+                                    val = _sessions[sess]._var[key];
                             }
 
                             res.push(key);
@@ -171,13 +175,13 @@
                         }
                         else if(type === "ping")
                         {
-                            res.push("PING");
+                            res.push("PING"+call);
                         }
                         else
                         {
-                            res.push("err");
+                            res.push("err"+call);
                             res.push("incomprehensible request");
-                            res.push([type, hash, sid]);
+                            res.push([type, hash, sess]);
                         }
 
                         res.length > 0 && socket.write(JSON.stringify(res));
