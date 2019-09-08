@@ -140,26 +140,25 @@
 
                             if(checkSession(_sessions, sid, hash))
                             {
-                                let key = data[3];
-                                let val = data[4];
+                                let key = 3 in data ? data[3] : null;
+                                let val = 4 in data ? data[4] : null;
 
-                                if(key && val)
-                                {
-                                    _sessions[sid]._var[key] = val;
-                                    res[1] = true;
-                                }
+                                if(typeof key !== "string") key = JSON.stringify(key);
+
+                                _sessions[sid]._var[key] = val;
+                                res[1] = true;
                             }
                         }
                         else if(type === "get" && hash.length > 0 && sid.length > 0)
                         {
                             res.push("get");
 
-                            let key = null;
+                            let key = 3 in data ? data[3] : null;
                             let val = null;
 
                             if(checkSession(_sessions, sid, hash))
                             {
-                                key = data[3];
+                                if(typeof key !== "string") key = JSON.stringify(key);
 
                                 if(key && _sessions[sid]._var[key])
                                     val = _sessions[sid]._var[key];
