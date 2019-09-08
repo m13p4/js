@@ -75,6 +75,7 @@
                         while(_sessions[newSession.key])
                             newSession.key = getRandomString(CONF.sessionKeyLength);
                         
+                        _sessions[newSession.key] = newSession;
                         res.push(newSession.key);
                     }
                     else if(type === "check" && hash.length > 0 && sid.length > 0)
@@ -127,7 +128,8 @@
         
         socket.on("close", function(data)
         {
-            
+            let iof = _sockets.indexOf(socket);
+            iof > -1 && _sockets.splice(iof, 1);
         });
     });
     SessionServer.listen(12345);
