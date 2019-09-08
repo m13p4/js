@@ -13,7 +13,7 @@
     const CONF = {
         expTime:            1000 * 20,
         
-        defaultKeyLength:   50,
+        defaultKeyLength:   87,
         largestKeyLength:   255, // 0xff
         
         PORT: 12345
