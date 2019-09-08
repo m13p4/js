@@ -7,12 +7,14 @@
  * @copyright Meliantchenkov Pavel
  */
 
-(function()
+(function(___)
 {
     const VERSION = "1.0.not_tested";
     const CONF = {
         expTime:            1000 * 20,
-        sessionKeyLength:   100
+        sessionKeyLength:   100,
+        
+        PORT: 12345
     };
     
     const net = require('net');
@@ -38,8 +40,27 @@
         return str.substr(0, len);
     }
     
-    var _sessions = {}, _sockets = [],
-    SessionServer = net.createServer(function(socket)
+    var _sessions = {}, _sockets = [];
+    
+    function checkSession(sid, hash, withoutExp)
+    {
+        let now  = Date.now();
+        let res = _sessions[sid] 
+                    && _sessions[sid].hash === hash
+                    && (withoutExp || _sessions[sid].exp < now);
+
+        if(!res && _sessions[sid])
+        {
+            _sessions[sid] = null;
+            delete _sessions[sid];
+        }
+        else if(res && !withoutExp) 
+            _sessions[sid].exp = now + _sessions[sid]._exp;
+        
+        return res;
+    }
+    
+    var SessionServer = net.createServer(function(socket)
     {
         _sockets.push(socket);
         
@@ -69,7 +90,9 @@
                             key:  getRandomString(CONF.sessionKeyLength),
                             hash: hash,
                             exp:  Date.now() + expTime,
-                            _exp: expTime
+                            
+                            _exp: expTime,
+                            _var: {}
                         };
                         
                         while(_sessions[newSession.key])
@@ -81,26 +104,13 @@
                     else if(type === "check" && hash.length > 0 && sid.length > 0)
                     {
                         res.push("check");
-                        
-                        let now  = Date.now();
-                        let _res = _sessions[sid] 
-                                    && _sessions[sid].hash === hash 
-                                    && _sessions[sid].exp < now;
-                        
-                        if(!_res && _sessions[sid])
-                        {
-                            _sessions[sid] = null;
-                            delete _sessions[sid];
-                        }
-                        else if(_res) _sessions[sid].exp = now + _sessions[sid]._exp;
-                        
-                        res.push(_res);
+                        res.push(checkSession(sid, hash));
                     }
                     else if(type === "close" && hash.length > 0 && sid.length > 0)
                     {
                         res.push("close");
                         
-                        if(_sessions[sid])
+                        if(checkSession(sid, hash, true))
                         {
                             _sessions[sid] = null;
                             delete _sessions[sid];
@@ -108,6 +118,41 @@
                             res.push(true);
                         }
                         else res.push(false);
+                    }
+                    else if(type === "set" && hash.length > 0 && sid.length > 0)
+                    {
+                        res.push("set");
+                        res.push(false);
+                        
+                        if(checkSession(sid, hash))
+                        {
+                            let key = data[3];
+                            let val = data[4];
+                            
+                            if(key && val)
+                            {
+                                _sessions[sid]._var[key] = val;
+                                res[1] = true;
+                            }
+                        }
+                    }
+                    else if(type === "get" && hash.length > 0 && sid.length > 0)
+                    {
+                        res.push("get");
+                        
+                        let key = null;
+                        let val = null;
+                        
+                        if(checkSession(sid, hash))
+                        {
+                            key = data[3];
+                            
+                            if(key && _sessions[sid]._var[key])
+                                val = _sessions[sid]._var[key];
+                        }
+                        
+                        res.push(key);
+                        res.push(val);
                     }
                     else if(type === "ping")
                     {
@@ -132,5 +177,8 @@
             iof > -1 && _sockets.splice(iof, 1);
         });
     });
-    SessionServer.listen(12345);
-})();
+    SessionServer.listen(CONF.PORT);
+    
+    ___.exports = SessionServer;
+    
+})(typeof module !== "undefined" ? module : {});
