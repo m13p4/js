@@ -11,9 +11,9 @@
 {
     const VERSION = "1.0.not_tested";
     const CONF = {
-        expTime:            1000 * 20,
+        expTime:            1e3 * 20,
         
-        defaultKeyLength:   50,
+        defaultKeyLength:   1e2,
         largestKeyLength:   255, // 0xff
         
         PORT: 12345
