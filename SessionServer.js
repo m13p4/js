@@ -99,6 +99,8 @@
 
                             let expTime = Number.isInteger(sid) && sid > 0 ? sid : _CONF.expTime;
                             let keyLength = Number.isInteger(data[3]) && data[3] > 0 ? data[3] : _CONF.defaultKeyLength;
+                            
+                            if(keyLength > _CONF.largestKeyLength) keyLength = _CONF.largestKeyLength;
 
                             let newSession = {
                                 key:  getRandomString(keyLength),
@@ -180,7 +182,6 @@
 
                         res.length > 0 && socket.write(JSON.stringify(res));
                     }
-
                 } 
                 catch(err) { console.log("[" + (new Date()).toLocaleString() + "] SessionServer -> Error:", err); }
             });
@@ -227,7 +228,6 @@
             }
         };
     }
-    
     ___.exports = SessionServer;
     
 })(typeof module !== "undefined" ? module : {});
