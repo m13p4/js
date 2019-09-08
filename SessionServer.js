@@ -12,7 +12,9 @@
     const VERSION = "1.0.not_tested";
     const CONF = {
         expTime:            1000 * 20,
-        sessionKeyLength:   100,
+        
+        defaultKeyLength:   50,
+        largestKeyLength:   255, // 0xff
         
         PORT: 12345
     };
@@ -40,9 +42,7 @@
         return str.substr(0, len);
     }
     
-    var _sessions = {}, _sockets = [];
-    
-    function checkSession(sid, hash, withoutExp)
+    function checkSession(_sessions, sid, hash, withoutExp)
     {
         let now  = Date.now();
         let res = _sessions[sid] 
@@ -60,124 +60,174 @@
         return res;
     }
     
-    var SessionServer = net.createServer(function(socket)
+    function mergeConf(cnf1, cnf2)
     {
-        _sockets.push(socket);
+        var cnf = JSON.parse(JSON.stringify(cnf1));
         
-        socket.write("node session server v" + VERSION + "\n");
+        if(cnf2 instanceof Array) 
+            for(var i in cnf2) 
+                cnf[i] = cnf2[i];
         
-        socket.on("data", function(_d)
+        return cnf;
+    }
+    
+    function _run(_CONF, _sessions, _sockets)
+    {
+        var Server = net.createServer(function(socket)
         {
-            try
+            _sockets.push(socket);
+
+            socket.write("node session server v" + VERSION + "\n");
+
+            socket.on("data", function(_d)
             {
-                let data = JSON.parse(_d.toString("utf8"));
-                
-                if(data instanceof Array && data.length > 0)
+                try
                 {
-                    let type = data[0] || "";
-                    let hash = data[1] || "";
-                    let sid  = data[2] || "";
-                    
-                    let res  = [];
-                    
-                    if(type === "new" && hash.length > 0)
+                    let data = JSON.parse(_d.toString("utf8"));
+
+                    if(data instanceof Array && data.length > 0)
                     {
-                        res.push("new");
-                        
-                        let expTime = Number.isInteger(sid) && sid > 0 ? sid : CONF.expTime;
-                        
-                        let newSession = {
-                            key:  getRandomString(CONF.sessionKeyLength),
-                            hash: hash,
-                            exp:  Date.now() + expTime,
-                            
-                            _exp: expTime,
-                            _var: {}
-                        };
-                        
-                        while(_sessions[newSession.key])
-                            newSession.key = getRandomString(CONF.sessionKeyLength);
-                        
-                        _sessions[newSession.key] = newSession;
-                        res.push(newSession.key);
-                    }
-                    else if(type === "check" && hash.length > 0 && sid.length > 0)
-                    {
-                        res.push("check");
-                        res.push(checkSession(sid, hash));
-                    }
-                    else if(type === "close" && hash.length > 0 && sid.length > 0)
-                    {
-                        res.push("close");
-                        
-                        if(checkSession(sid, hash, true))
+                        let type = data[0] || "";
+                        let hash = data[1] || "";
+                        let sid  = data[2] || "";
+
+                        let res  = [];
+
+                        if(type === "new" && hash.length > 0)
                         {
-                            _sessions[sid] = null;
-                            delete _sessions[sid];
-                            
-                            res.push(true);
+                            res.push("new");
+
+                            let expTime = Number.isInteger(sid) && sid > 0 ? sid : _CONF.expTime;
+                            let keyLength = Number.isInteger(data[3]) && data[3] > 0 ? data[3] : _CONF.defaultKeyLength;
+
+                            let newSession = {
+                                key:  getRandomString(keyLength),
+                                hash: hash,
+                                exp:  Date.now() + expTime,
+
+                                _exp: expTime,
+                                _var: {}
+                            };
+
+                            while(_sessions[newSession.key])
+                                newSession.key = getRandomString(keyLength);
+
+                            _sessions[newSession.key] = newSession;
+                            res.push(newSession.key);
                         }
-                        else res.push(false);
-                    }
-                    else if(type === "set" && hash.length > 0 && sid.length > 0)
-                    {
-                        res.push("set");
-                        res.push(false);
-                        
-                        if(checkSession(sid, hash))
+                        else if(type === "check" && hash.length > 0 && sid.length > 0)
                         {
-                            let key = data[3];
-                            let val = data[4];
-                            
-                            if(key && val)
+                            res.push("check");
+                            res.push(checkSession(_sessions, sid, hash));
+                        }
+                        else if(type === "close" && hash.length > 0 && sid.length > 0)
+                        {
+                            res.push("close");
+
+                            if(checkSession(_sessions, sid, hash, true))
                             {
-                                _sessions[sid]._var[key] = val;
-                                res[1] = true;
+                                _sessions[sid] = null;
+                                delete _sessions[sid];
+
+                                res.push(true);
+                            }
+                            else res.push(false);
+                        }
+                        else if(type === "set" && hash.length > 0 && sid.length > 0)
+                        {
+                            res.push("set");
+                            res.push(false);
+
+                            if(checkSession(_sessions, sid, hash))
+                            {
+                                let key = data[3];
+                                let val = data[4];
+
+                                if(key && val)
+                                {
+                                    _sessions[sid]._var[key] = val;
+                                    res[1] = true;
+                                }
                             }
                         }
-                    }
-                    else if(type === "get" && hash.length > 0 && sid.length > 0)
-                    {
-                        res.push("get");
-                        
-                        let key = null;
-                        let val = null;
-                        
-                        if(checkSession(sid, hash))
+                        else if(type === "get" && hash.length > 0 && sid.length > 0)
                         {
-                            key = data[3];
-                            
-                            if(key && _sessions[sid]._var[key])
-                                val = _sessions[sid]._var[key];
+                            res.push("get");
+
+                            let key = null;
+                            let val = null;
+
+                            if(checkSession(_sessions, sid, hash))
+                            {
+                                key = data[3];
+
+                                if(key && _sessions[sid]._var[key])
+                                    val = _sessions[sid]._var[key];
+                            }
+
+                            res.push(key);
+                            res.push(val);
                         }
-                        
-                        res.push(key);
-                        res.push(val);
+                        else if(type === "ping")
+                        {
+                            res.push("PING");
+                        }
+                        else
+                        {
+                            res.push("err");
+                            res.push("incomprehensible request");
+                            res.push([type, hash, sid]);
+                        }
+
+                        res.length > 0 && socket.write(JSON.stringify(res));
                     }
-                    else if(type === "ping")
-                    {
-                        res.push("PING");
-                    }
-                    else
-                    {
-                        res.push("err");
-                        res.push("incomprehensible request");
-                        res.push([type, hash, sid]);
-                    }
-                    
-                    res.length > 0 && socket.write(JSON.stringify(res));
-                }
-                
-            } catch(err) { console.log("[" + (new Date()).toLocaleString() + "] SessionServer -> Error:", err); }
+
+                } 
+                catch(err) { console.log("[" + (new Date()).toLocaleString() + "] SessionServer -> Error:", err); }
+            });
+
+            socket.on("close", function(data)
+            {
+                let iof = _sockets.indexOf(socket);
+                iof > -1 && _sockets.splice(iof, 1);
+            });
         });
         
-        socket.on("close", function(data)
+        Server.listen(_CONF.PORT);
+        
+        return Server;
+    };
+    
+    function SessionServer() 
+    {
+        this.conf = null,
+        this.server = null,
+        
+        this.sessions = {},
+        this.sockets = [],
+        
+        this.run = function(cnf)
         {
-            let iof = _sockets.indexOf(socket);
-            iof > -1 && _sockets.splice(iof, 1);
-        });
-    });
-    SessionServer.listen(CONF.PORT);
+            this.conf   = mergeConf(CONF, cnf);
+            this.server = _run(this.conf, this.sessions, this.sockets);
+        };
+        
+        this.stop = function()
+        {
+            if(this.server)
+            {
+                this.server.close(function(d)
+                {
+                    console.log("[" + (new Date()).toLocaleString() + "] SessionServer -> stop:", d);
+                });
+                
+                this.server = null;
+                this.conf = null;
+                this.sessions = {};
+                this.sockets = [];
+            }
+        };
+    }
     
     ___.exports = SessionServer;
     
