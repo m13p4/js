@@ -58,6 +58,13 @@
         this.conf = null;
         this.client = null;
         
+        function genID()
+        {
+            let id; do id = getRandomString(); while(list[id])
+            
+            return id;
+        }
+        
         this.connect = function(conf)
         {
             this.conf = mergeConf(CONF, conf);
@@ -98,7 +105,7 @@
         
         this.new = function(callback, hash, exp, length)
         {
-            let id  = getRandomString();
+            let id  = genID();
             let req = ["new:"+id, hash];
             
             exp && req.push(exp);
@@ -111,7 +118,7 @@
         
         this.check = function(callback, hash, sid)
         {
-            let id  = getRandomString();
+            let id  = genID();
             let req = ["check:"+id, hash, sid];
             
             list[id] = callback || emptyCallback;
