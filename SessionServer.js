@@ -1,53 +1,36 @@
-/**
- * A Session Server.
+/* Session Server.
  * 
+ * @author Meliantchenkov Pavel
  * @version 1.0
- *
- * @author m13p4
- * @copyright Meliantchenkov Pavel
  */
-
 (function(___)
 {
     const VERSION = "1.0.not_tested";
     const CONF = {
         expTime:            1000 * 20,
         
-        defaultKeyLength:   87,
+        defaultKeyLength:   50,
         largestKeyLength:   255, // 0xff
         
-        PORT: 12345
-    };
-    
-    const net = require('net');
-    
-    function getRandomString(len)
-    {
-        var str = ""; len = len || 16;
-
-        while(str.length < len)
-            str += Math.random().toString(36).substr(2);
-
-        var upCaseCnt = Math.round(Math.random() * len);
+        PORT: 12345,
         
-        while(upCaseCnt--)
-        {
-            let upPos = Math.round(Math.random() * len);
-            
-            str = str.substring(0, upPos)         + 
-                  str.charAt(upPos).toUpperCase() + 
-                  str.substring(upPos + 1)        ;
-        }
-
-        return str.substr(0, len);
-    }
+        useInCluster: false
+    };
+    const _sep = "\t;;\f.?!;;\n";
+    
+    const cluster = require("cluster");
+    const net = require('net');
+    const _ = require('./helper.js');
+    
+    const isClusterMaster = cluster.isMaster;
+    
     
     function checkSession(_sessions, sid, hash, withoutExp)
     {
-        let now  = Date.now();
+        let now = Date.now();
         let res = _sessions[sid] 
                     && _sessions[sid].hash === hash
-                    && (withoutExp || _sessions[sid].exp < now);
+                    && (!withoutExp || _sessions[sid].exp < now);
 
         if(!res && _sessions[sid])
         {
@@ -60,54 +43,40 @@
         return res;
     }
     
-    function mergeConf(cnf1, cnf2)
+    //@todo: implement worker handling
+    async function handleMessage(_CONF, _sessions, socket, dataArr, isWorker)
     {
-        var cnf = JSON.parse(JSON.stringify(cnf1));
-        
-        if(cnf2 instanceof Array) 
-            for(var i in cnf2) 
-                cnf[i] = cnf2[i];
-        
-        return cnf;
-    }
-    
-    function _run(_CONF, _sessions, _sockets)
-    {
-        var Server = net.createServer(function(socket)
+        for(let i = 0; i < dataArr.length; i++)
         {
-            _sockets.push(socket);
+            let data = dataArr[i].trim();
 
-            socket.write("node session server v" + VERSION + "\n");
-
-            socket.on("data", function(_d)
+            if(data.length > 0)
             {
                 try
                 {
-                    let data = JSON.parse(_d.toString("utf8"));
+                    data = JSON.parse(data);
 
                     if(data instanceof Array && data.length > 0)
                     {
-                        let type = data[0] || ":";
-                        let hash = data[1] || "";
-                        let sess = data[2] || "";
+                        let id   = data[0];
+                        let type = data[1] || "";
+                        let hash = data[2] || "";
+                        let sess = data[3] || "";
 
-                        let res  = [];
-
-                        let _type = type.split(":");
-                        let call  = _type[1] ? ":"+_type[1] : "";
-                        type = _type[0] || "";
+                        let res  = [id];
 
                         if(type === "new" && hash.length > 0)
                         {
-                            res.push("new"+call);
+                            res.push("new");
 
-                            let expTime = Number.isInteger(sess) && sess > 0 ? sess : _CONF.expTime;
-                            let keyLength = Number.isInteger(data[3]) && data[3] > 0 ? data[3] : _CONF.defaultKeyLength;
-                            
+                            let expTime   = Number.isInteger(sess) && sess > 0 ? sess : _CONF.expTime;
+                            let keyLength = Number.isInteger(data[4]) && data[4] > 0 ? data[4] : _CONF.defaultKeyLength;
+                            let base; if(Number.isInteger(data[5])) base = data[5];
+
                             if(keyLength > _CONF.largestKeyLength) keyLength = _CONF.largestKeyLength;
 
                             let newSession = {
-                                key:  getRandomString(keyLength),
+                                key:  _.getRandomString(keyLength, base),
                                 hash: hash,
                                 exp:  Date.now() + expTime,
 
@@ -116,19 +85,19 @@
                             };
 
                             while(_sessions[newSession.key])
-                                newSession.key = getRandomString(keyLength);
+                                newSession.key = _.getRandomString(keyLength, base);
 
                             _sessions[newSession.key] = newSession;
                             res.push(newSession.key);
                         }
                         else if(type === "check" && hash.length > 0 && sess.length > 0)
                         {
-                            res.push("check"+call);
+                            res.push("check");
                             res.push(checkSession(_sessions, sess, hash));
                         }
                         else if(type === "close" && hash.length > 0 && sess.length > 0)
                         {
-                            res.push("close"+call);
+                            res.push("close");
 
                             if(checkSession(_sessions, sess, hash, true))
                             {
@@ -141,25 +110,25 @@
                         }
                         else if(type === "set" && hash.length > 0 && sess.length > 0)
                         {
-                            res.push("set"+call);
+                            res.push("set");
                             res.push(false);
 
                             if(checkSession(_sessions, sess, hash))
                             {
-                                let key = 3 in data ? data[3] : null;
-                                let val = 4 in data ? data[4] : null;
+                                let key = 4 in data ? data[4] : null;
+                                let val = 5 in data ? data[5] : null;
 
                                 if(typeof key !== "string") key = JSON.stringify(key);
 
                                 _sessions[sess]._var[key] = val;
-                                res[1] = true;
+                                res[2] = true;
                             }
                         }
                         else if(type === "get" && hash.length > 0 && sess.length > 0)
                         {
-                            res.push("get"+call);
+                            res.push("get");
 
-                            let key = 3 in data ? data[3] : null;
+                            let key = 4 in data ? data[4] : null;
                             let val = null;
 
                             if(checkSession(_sessions, sess, hash))
@@ -173,21 +142,49 @@
                             res.push(key);
                             res.push(val);
                         }
-                        else if(type === "ping")
-                        {
-                            res.push("PING"+call);
-                        }
+                        else if(type === "ping") res.push("PING");
                         else
                         {
-                            res.push("err"+call);
+                            res.push("err");
                             res.push("incomprehensible request");
-                            res.push([type, hash, sess]);
+                            res.push(data);
                         }
 
-                        res.length > 0 && socket.write(JSON.stringify(res));
+                        res.length > 0 && socket.write(JSON.stringify(res)+_sep);
                     }
-                } 
-                catch(err) { console.log("[" + (new Date()).toLocaleString() + "] SessionServer -> Error:", err); }
+                }
+                catch(e){ /* empty */ }
+            }
+        }
+    }
+    
+    function _run(_CONF, _sessions, _sockets, isWorker)
+    {
+        var Server = net.createServer(function(socket)
+        {
+            var dataStr = "";
+            
+            _sockets.push(socket);
+
+            //socket.write(JSON.stringify("session server v" + VERSION) + _sep);
+
+            socket.on("data", function(_d)
+            {
+                try
+                {
+                    let chunk = _d.toString("utf8");
+                    
+                    dataStr += chunk;
+                    
+                    if(dataStr.indexOf(_sep) > -1)
+                    {
+                        let dataArr = dataStr.split(_sep);
+                        dataStr = dataArr.pop();
+                        
+                        handleMessage(_CONF, _sessions, socket, dataArr, isWorker);
+                    }
+                }
+                catch(e) { /* empty */ }
             });
 
             socket.on("close", function(data)
@@ -195,29 +192,73 @@
                 let iof = _sockets.indexOf(socket);
                 iof > -1 && _sockets.splice(iof, 1);
             });
+            
+            socket.on("error", function(err)
+            {
+                console.log(err);
+            });
         });
         
-        Server.listen(_CONF.PORT);
+        Server.listen(_CONF.useInCluster && isClusterMaster ? _CONF.PORT * 2 : _CONF.PORT);
         
         return Server;
     };
     
     function SessionServer() 
     {
-        this.conf = null,
-        this.server = null,
+        var intervalID;
         
-        this.sessions = {},
-        this.sockets = [],
+        this.conf = null;
+        this.server = null;
+        
+        this.sessions = {};
+        this.sockets = [];
+        
+        this.socket = null;
+        this.isWorker = false;
         
         this.run = function(cnf)
         {
-            this.conf   = mergeConf(CONF, cnf);
-            this.server = _run(this.conf, this.sessions, this.sockets);
+            this.conf = _.mergeConf(CONF, cnf);
+            
+            if(isClusterMaster)
+            {
+                this.server = _run(this.conf, this.sessions, this.sockets);
+
+                var _this = this;
+                intervalID = setInterval(function()
+                {
+                    let now  = Date.now();
+
+                    for(let key in _this.sessions)
+                        if(_this.sessions[key].exp < now)
+                        {
+                            _this.sessions[key] = null;
+                            delete _this.sessions[key];
+                        }
+
+                }, 1000 * 10);
+            }
+            else if(this.conf.useInCluster)
+            {
+                this.isWorker = true;
+                this.server = _run(this.conf, this.sessions, this.sockets, true);
+                
+                this.socket = new net.Socket();
+            
+                this.socket.connect(this.conf.PORT * 2, "127.0.0.1", function() 
+                {
+                    console.log("[" + (new Date()).toLocaleString() + "] SessionClient -> connected to " + conf.HOST + ":" + conf.PORT);
+                });
+            }
+            
+            //console.log(isClusterMaster);
         };
         
         this.stop = function()
         {
+            intervalID && clearInterval(intervalID);
+            
             if(this.server)
             {
                 this.server.close(function(d)
