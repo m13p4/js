@@ -13,6 +13,7 @@
         largestKeyLength:   255, // 0xff
         
         PORT: 12345,
+        MASTER_PORT: 54321,
         
         useInCluster: false
     };
@@ -199,10 +200,16 @@
             });
         });
         
-        let clbk = function(){console.log("[" + (new Date()).toLocaleString() + "] SessionServer"+(isWorker ? " Worker":"")+" runs on port "+_CONF.PORT);};
+        let clbk = function()
+        {
+            console.log("[" + (new Date()).toLocaleString() + "] SessionServer"
+                            + (isWorker ? " Worker":"")+" runs on port "
+                            + (_CONF.useInCluster && isClusterMaster ? _CONF.MASTER_PORT : _CONF.PORT)
+                       );
+        };
         
         if(_CONF.useInCluster && isClusterMaster)
-            Server.listen(_CONF.PORT * 2, "127.0.0.1", clbk);
+            Server.listen(_CONF.MASTER_PORT, "127.0.0.1", clbk);
         else
             Server.listen(_CONF.PORT, clbk);
         
@@ -251,7 +258,7 @@
                 
                 this.socket = new net.Socket();
             
-                this.socket.connect(this.conf.PORT * 2, "127.0.0.1", function() 
+                this.socket.connect(this.conf.MASTER_PORT, "127.0.0.1", function() 
                 {
                     console.log("[" + (new Date()).toLocaleString() + "] SessionServer Worker -> connected to SessionServer Master");
                 });
