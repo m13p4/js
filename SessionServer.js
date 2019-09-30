@@ -233,7 +233,7 @@
         {
             this.conf = _.mergeConf(CONF, cnf);
             
-            if(isClusterMaster)
+            if(isClusterMaster || !this.conf.useInCluster)
             {
                 this.server = _run(this.conf, this.sessions, this.sockets);
 
