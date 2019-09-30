@@ -199,7 +199,12 @@
             });
         });
         
-        Server.listen(_CONF.useInCluster && isClusterMaster ? _CONF.PORT * 2 : _CONF.PORT);
+        let clbk = function(){console.log("[" + (new Date()).toLocaleString() + "] SessionServer"+(isWorker ? " Worker":"")+" runs on port "+_CONF.PORT);};
+        
+        if(_CONF.useInCluster && isClusterMaster)
+            Server.listen(_CONF.PORT * 2, "127.0.0.1", clbk);
+        else
+            Server.listen(_CONF.PORT, clbk);
         
         return Server;
     };
@@ -248,7 +253,7 @@
             
                 this.socket.connect(this.conf.PORT * 2, "127.0.0.1", function() 
                 {
-                    console.log("[" + (new Date()).toLocaleString() + "] SessionClient -> connected to " + conf.HOST + ":" + conf.PORT);
+                    console.log("[" + (new Date()).toLocaleString() + "] SessionServer Worker -> connected to SessionServer Master");
                 });
             }
             
