@@ -129,6 +129,8 @@ function wSocketServer(httpServer, onConnect)
         let opcode = "opcode" in opts ? opts.opcode : 1;
         let mask   = "mask"   in opts ? opts.mask   : true;
         
+        data = Buffer.from(data);
+        
         let maskKey = mask ? getRandomBytes(4) : null;
         let length  = data.length;             
         let buff    = Buffer.from([]);
@@ -159,8 +161,6 @@ function wSocketServer(httpServer, onConnect)
             buff = Buffer.concat([buff, tmp]);
         }
         buff = Buffer.concat([buff, maskKey]);
-        
-        data = Buffer.from(data);
         
         if(mask)
         {
