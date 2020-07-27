@@ -1,7 +1,7 @@
 /**
  * a ws server implementation
  * 
- * @version 0.1
+ * @version 1.0
  *
  * @author m13p4
  * @copyright Meliantchenkov Pavel
@@ -60,6 +60,8 @@ function wSocketServer(httpServer, onConnect)
         }
         else ws.msgReader.offset = 0;
         
+//        console.log(ws.msgReader.data.length);
+        
         if(ws.msgReader.mask && !ws.msgReader.maskKey && ws.msgReader.offset + 4 <= buff.length)
         {
             ws.msgReader.maskKey = buff.slice(ws.msgReader.offset, ws.msgReader.offset + 4);
@@ -70,22 +72,19 @@ function wSocketServer(httpServer, onConnect)
         else if(!ws.msgReader.readPlayload && !ws.msgReader.mask)
             ws.msgReader.readPlayload = true;
         
-        if(ws.msgReader.readPlayload)
+        if(ws.msgReader.readPlayload) process.nextTick(function()
         {
             let toReadBytes = ws.msgReader.len - ws.msgReader.data.length;
             toReadBytes = toReadBytes <= buff.length ? toReadBytes : buff.length;
 
-            let data = [];
-            let dataBuff = buff.slice(ws.msgReader.offset, ws.msgReader.offset + toReadBytes);
+            let data = buff.slice(ws.msgReader.offset, ws.msgReader.offset + toReadBytes);
 
             if(ws.msgReader.mask)
             {
-                for(let i = 0; i < dataBuff.length; i++)
-                    data.push(dataBuff[i] ^ ws.msgReader.maskKey[i % 4]);
-
-                data = Buffer.from(data);
+                let l = ws.msgReader.data.length;
+                for(let i = 0; i < data.length; i++)
+                    data[i] = data[i] ^ ws.msgReader.maskKey[(l+i) % 4];
             }
-            else data = dataBuff;
 
             ws.msgReader.data = Buffer.concat([ws.msgReader.data, data]);
 
@@ -107,7 +106,8 @@ function wSocketServer(httpServer, onConnect)
                 ws.inReadMode = false;
                 delete ws.msgReader;
             }
-        }
+        });
+        
     }
     function getRandomBytes(length, asByteArray)
     {
@@ -120,6 +120,8 @@ function wSocketServer(httpServer, onConnect)
     }
     function sendData(ws, data, opts)
     {
+        opts = opts || {};
+        
         let fin    = "fin"    in opts ? opts.fin    : true;
         let rsv1   = "rsv1"   in opts ? opts.rsv1   : false;
         let rsv2   = "rsv2"   in opts ? opts.rsv2   : false;
@@ -158,8 +160,7 @@ function wSocketServer(httpServer, onConnect)
         }
         buff = Buffer.concat([buff, maskKey]);
         
-        let dataBuff   = Buffer.from(data);
-        let maskedData = [];
+        data = Buffer.from(data);
         
         if(mask)
         {
@@ -167,13 +168,11 @@ function wSocketServer(httpServer, onConnect)
             for(let i = 0; i < maskKey.length; i++)
                 toMask.push(~maskKey[i]);
             
-            for(let i = 0; i < dataBuff.length; i++)
-                maskedData.push(~dataBuff[i] ^ toMask[i % 4]);
-            
-            maskedData = Buffer.from(maskedData);
-            buff = Buffer.concat([buff, maskedData]);
+            for(let i = 0; i < data.length; i++)
+                data[i] = ~data[i] ^ toMask[i % 4];
         }
-        else buff = Buffer.concat([buff, dataBuff])
+        
+        buff = Buffer.concat([buff, data])
         
         ws.socket.write(buff);
     }
@@ -226,7 +225,6 @@ function wSocketServer(httpServer, onConnect)
                 ws.isOpen   = false;
                 ws.pingData = parseInt(Date.now() * Math.random()).toString(36);
                 sendData(ws, ws.pingData, {opcode: 9});
-                
             }, 1000 * 15),
             
             srv: srv
@@ -269,6 +267,7 @@ function wSocketServer(httpServer, onConnect)
     {
         if(req.headers.upgrade !== 'websocket')
             return socket.end('HTTP/1.1 400 Bad Request\r\n\r\n');
+        
         if(!("sec-websocket-key" in req.headers))
             return socket.end('HTTP/1.1 403 Forbidden\r\n\r\n');
         
@@ -281,13 +280,14 @@ function wSocketServer(httpServer, onConnect)
                       + "Sec-WebSocket-Accept: " +  wsAcceptKey + "\r\n\r\n");
         
         let ws = getWSocket(socket, wsServer);
+        
         ws.socket.on("data", function(buff)
         {
             setImmediate(readData, ws, buff);
         });
         ws.socket.on("error", function(err)
         {
-            ws.events.emit("erroe", err, ws);
+            ws.events.emit("error", err, ws);
         });
         ws.socket.on("close", function(hadError)
         {
