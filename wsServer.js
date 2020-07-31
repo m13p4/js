@@ -34,7 +34,12 @@ if(Threads.isMainThread)
                 {
                     msg.data = Buffer.from(msg.data || []);
                     
-                    if(msg.opcode === 8) delWSocket(ws); // close frame
+                    if(msg.opcode === 8) // close frame
+                    {
+                        ws._closeCode = msg.data[0] << 8 | msg.data[1];
+                        sendData(ws, msg.data, {opcode: 10});
+                        delWSocket(ws);
+                    }
                     else if(msg.opcode === 9) //ping
                     {
                         sendData(ws, msg.data, {opcode: 10});
@@ -45,10 +50,12 @@ if(Threads.isMainThread)
                         ws.isOpen = msg.data === ws.pingData;
                         ws.events.emit("pong", msg.data, ws);
                     }
-                    else ws.events.emit("data", [msg.data, msg.fin], ws);
+                    else ws.events.emit("data", [msg.data, msg.opcode, msg.fin], ws);
                 });
             }
-            ws.readWorker.postMessage(buff);
+//            ws.readWorker.postMessage(buff);
+            let sharedBuff = Buffer.from(new SharedArrayBuffer(buff.length)).fill(buff);
+            ws.readWorker.postMessage(sharedBuff);
         }
         function getRandomBytes(length, asByteArray)
         {
@@ -112,10 +119,8 @@ if(Threads.isMainThread)
                 for(let i = 0; i < data.length; i++)
                     data[i] = ~data[i] ^ toMask[i % 4];
             }
-
-            buff = Buffer.concat([buff, data])
-
-            ws.socket.write(buff);
+            
+            ws.socket.write(Buffer.concat([buff, data]));
         }
         function getEventHandler()
         {
@@ -154,10 +159,12 @@ if(Threads.isMainThread)
                 send: function(msg)
                 {
                     setImmediate(sendData, this, msg);
+                    return this;
                 },
                 on: function(eventName, callBack)
                 {
                     this.events.on(eventName, callBack);
+                    return this;
                 },
                 inReadMode: false,
                 isOpen: false,
@@ -194,13 +201,15 @@ if(Threads.isMainThread)
             listen: function(port, callback)
             {
                 this.httpServer.listen(port, callback||function(){});
+                return this;
             },
             on: function(eventName, callBack)
             {
                 this.events.on(eventName, callBack);
+                return this;
             }
         };
-
+        
         typeof onConnect === "function" && wsServer.on("connect", onConnect);
 
         wsServer.httpServer.on("upgrade", function(req, socket)
@@ -231,7 +240,7 @@ if(Threads.isMainThread)
             });
             ws.socket.on("close", function(hadError)
             {
-                ws.events.emit("close", hadError, ws);
+                ws.events.emit("close", [ws._closeCode, hadError], ws);
                 delWSocket(ws);
             });
             ws.socket.on("timeout", function()
@@ -244,7 +253,6 @@ if(Threads.isMainThread)
                 ws.events.emit("end", [], ws);
                 delWSocket(ws);
             });
-
             wsServer.wsList[ws.id] = ws;
             wsServer.events.emit("connect", [req, ws], wsServer);
         });
@@ -254,10 +262,15 @@ if(Threads.isMainThread)
 }
 else //(read)worker part
 {
-    var msgReader, exitTimeOut, bigIntLimit = BigInt(2) ** BigInt(53);
-    Threads.parentPort.on("message", function(data)
+    var data = new Uint8Array(0), msgReader, exitTimeOut, 
+        bigIntLimit = BigInt(2) ** BigInt(53);
+    Threads.parentPort.on("message", function(d)
     {
         if(exitTimeOut) exitTimeOut = clearTimeout(exitTimeOut);
+        
+        let _data = new Uint8Array(data.length + d.length);
+        _data.set(data); _data.set(d, data.length);
+        data = _data;
         
         let offset = msgReader ? 0 : 2;
         if(!msgReader)
@@ -266,21 +279,12 @@ else //(read)worker part
                 opcode: data[0] & 0b1111,
                 fin:    !!(data[0] >> 7),
                 mask:   !!(data[1] >> 7),
-                read:   -1,
+                read:   -1
             };
-            
-            if(msgReader.opcode === 8) //close frame
-            {
-                Threads.parentPort.postMessage({opcode: 8}); 
-                return process.exit();
-            }
             
             let length = data[1] & 0b1111111;
             if(length === 126)
-            {
-                length = data[offset] << 8 | data[offset + 1];
-                offset += 2;
-            }
+                length = data[offset++] << 8 | data[offset++];
             else if(length === 127)
             {
                 length = Buffer.from(data.slice(offset, offset + 8)).readBigUInt64BE();
@@ -288,6 +292,7 @@ else //(read)worker part
 
                 offset += 8;
             }
+            
             msgReader.len  = length;
             msgReader.data = Buffer.from(new SharedArrayBuffer(length));
 //            msgReader.data = Buffer.allocUnsafe(length);
@@ -308,7 +313,8 @@ else //(read)worker part
             let toReadBytes = msgReader.len - msgReader.read;
             toReadBytes = toReadBytes <= data.length - offset 
                             ? toReadBytes : data.length - offset;
-            let _data = data.slice(offset, offset + toReadBytes);
+            _data = data.slice(offset, offset + toReadBytes);
+            data  = data.slice(offset + toReadBytes);
 
             if(msgReader.mask) for(let i = 0; i < _data.length; i++)
                     msgReader.data[msgReader.read] = _data[i] 
