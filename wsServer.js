@@ -1,3 +1,5 @@
+/* global parseInt, BigInt */
+
 /**
  * a ws server implementation
  * 
@@ -32,7 +34,7 @@ if(Threads.isMainThread)
                 });
                 ws.readWorker.on("message", function(msg)
                 {
-                    msg.data = Buffer.from(msg.data || []);
+                    msg.data = Buffer.from("data" in msg ? msg.data.buffer : []);
                     
                     if(msg.opcode === 8) // close frame
                     {
@@ -53,9 +55,7 @@ if(Threads.isMainThread)
                     else ws.events.emit("data", [msg.data, msg.opcode, msg.fin], ws);
                 });
             }
-//            ws.readWorker.postMessage(buff);
-            let sharedBuff = Buffer.from(new SharedArrayBuffer(buff.length)).fill(buff);
-            ws.readWorker.postMessage(sharedBuff);
+            setImmediate(function(a,b){a.postMessage(b);}, ws.readWorker, buff);
         }
         function getRandomBytes(length, asByteArray)
         {
@@ -140,19 +140,16 @@ if(Threads.isMainThread)
                     if(!(name in this.list)) return;
                     args = args instanceof Array ? args : [args];
 
-                    let eventList = this.list[name];
-                    process.nextTick(function()
-                    {
-                        for(let i = 0; i < eventList.length; i++)
-                            eventList[i].apply(thisArg, args);
-                    });
+                    let eventList = this.list[name] || [];
+                    for(let i = 0; i < eventList.length; i++)
+                        setImmediate(function(a,b,c){a.apply(b,c);}, eventList[i], thisArg, args);
                 }
             };
         }
         function getWSocket(socket, srv)
         {
             let ws = {
-                id: (Math.random()*Date.now()) + "." + Date.now(),
+                id: BigInt("0x1"+getRandomBytes(16).toString("hex")).toString(36) + Date.now().toString(36),
                 socket: socket,
                 events: getEventHandler(),
 
@@ -207,7 +204,9 @@ if(Threads.isMainThread)
             {
                 this.events.on(eventName, callBack);
                 return this;
-            }
+            },
+            
+            playLoadLimit: 2 ** 27 //128 MiB
         };
         
         typeof onConnect === "function" && wsServer.on("connect", onConnect);
@@ -232,7 +231,7 @@ if(Threads.isMainThread)
 
             ws.socket.on("data", function(buff)
             {
-                readData(ws, buff);
+                setImmediate(readData, ws, buff);
             });
             ws.socket.on("error", function(err)
             {
@@ -294,7 +293,7 @@ else //(read)worker part
             }
             
             msgReader.len  = length;
-            msgReader.data = Buffer.from(new SharedArrayBuffer(length));
+            msgReader.data = new Uint8Array(new SharedArrayBuffer(length));
 //            msgReader.data = Buffer.allocUnsafe(length);
         }
 
@@ -329,6 +328,7 @@ else //(read)worker part
                     data:   msgReader.data,
                     fin:    msgReader.fin
                 });
+                
                 msgReader   = false;
                 exitTimeOut = setTimeout(function(){process.exit();}, 1000);
             }
