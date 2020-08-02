@@ -302,9 +302,6 @@ else //(read)worker part
                 read:   -1
             };
             
-            if(opts.closeOnUnknownOpcode && opcodes.indexOf(msgReader.opcode) < 0)
-                msgReader.err = [1003, new Error("unknown opcode ("+msgReader.opcode+")")];
-            
             let length = data[1] & 0b1111111;
             if(length === 126)
                 length = data[offset++] << 8 | data[offset++];
@@ -316,7 +313,9 @@ else //(read)worker part
                 offset += 8;
             }
             
-            if(length > opts.playLoadLimit)
+            if(opts.closeOnUnknownOpcode && opcodes.indexOf(msgReader.opcode) < 0)
+                msgReader.err = [1003, new Error("unknown opcode ("+msgReader.opcode+")")];
+            else if(length > opts.playLoadLimit)
                 msgReader.err = [1009, new Error("message length ("+length+") > playLoadLimit ("+opts.playLoadLimit+")")];
             
             msgReader.data   = msgReader.err ? false : new Uint8Array(new SharedArrayBuffer(length));
@@ -329,7 +328,7 @@ else //(read)worker part
             msgReader = false;
             process.exit(1);
         }
-
+        
         if(msgReader.mask && !msgReader.maskKey && offset + 4 <= data.length)
         {
             msgReader.read    = 0;
