@@ -226,7 +226,7 @@ if(Threads.isMainThread)
                 closeOnUnknownOpcode: true, 
                 closeOnUnmaskedFrame: true, //rfc6455#section-5.1
                 pingInterval: 1000 * 30     //rfc6455#section-5.5.2
-            }, opts)
+            }, opts || {})
         };
         
         typeof onConnect === "function" && wsServer.on("connect", onConnect);
