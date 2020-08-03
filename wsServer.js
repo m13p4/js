@@ -12,9 +12,10 @@ if(Threads.isMainThread)
 {
     const Crypto = require('crypto');
     
-    function wSocketServer(httpServer, onConnect)
+    function wSocketServer(httpServer, opts, onConnect)
     {
         if(!httpServer) throw new Error("require a http server");
+        if(typeof opts === "function") onConnect = opts, opts = {};
 
         const WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
         function readData(ws, buff)
@@ -109,10 +110,11 @@ if(Threads.isMainThread)
                 }
                 buff = Buffer.concat([buff, tmp]);
             }
-            buff = Buffer.concat([buff, maskKey]);
 
             if(mask)
             {
+                buff = Buffer.concat([buff, maskKey]);
+                
                 let toMask = [];
                 for(let i = 0; i < maskKey.length; i++) 
                     toMask.push(~maskKey[i]);
@@ -218,13 +220,13 @@ if(Threads.isMainThread)
                 this.events.on(eventName, callBack);
                 return this;
             },
-            opts: {
+            opts: Object.assign({
                 playLoadLimit: 2 ** 27, //128 MiB
                 closeOnError:  !true,
                 closeOnUnknownOpcode: true, 
                 closeOnUnmaskedFrame: true, //rfc6455#section-5.1
                 pingInterval: 1000 * 30     //rfc6455#section-5.5.2
-            }
+            }, opts)
         };
         
         typeof onConnect === "function" && wsServer.on("connect", onConnect);
@@ -316,7 +318,7 @@ else //(read)worker part
             if(opts.closeOnUnknownOpcode && opcodes.indexOf(msgReader.opcode) < 0)
                 msgReader.err = [1003, new Error("unknown opcode ("+msgReader.opcode+")"), true];
             else if(opts.closeOnUnmaskedFrame && !msgReader.mask)
-                msgReader.err = [1002, new Error("unknown opcode ("+msgReader.opcode+")"), true];
+                msgReader.err = [1002, new Error("recieved frame is not masked"), true];
             else if(length > opts.playLoadLimit)
                 msgReader.err = [1009, new Error("message length ("+length+") > playLoadLimit ("+opts.playLoadLimit+")")];
             
