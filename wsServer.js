@@ -36,7 +36,7 @@ if(Threads.isMainThread)
                     if(msg.err)
                     {
                         ws.events.emit("error", [msg.err[1], msg], ws);
-                        (ws.srv.opts.closeOnError || msg.err[0] === 1003) && delWSocket(ws, msg.err);
+                        (ws.srv.opts.closeOnError || msg.err[2]) && delWSocket(ws, msg.err);
                         return;
                     }
                     msg.data = Buffer.from(msg.data ? msg.data.buffer : []);
@@ -76,7 +76,7 @@ if(Threads.isMainThread)
             let rsv2   = "rsv2"   in opts ? opts.rsv2   : false;
             let rsv3   = "rsv3"   in opts ? opts.rsv3   : false;
             let opcode = "opcode" in opts ? opts.opcode : 1;
-            let mask   = "mask"   in opts ? opts.mask   : true;
+            let mask   = "mask"   in opts ? opts.mask   : false;
 
             data = Buffer.from(data);
 
@@ -163,7 +163,6 @@ if(Threads.isMainThread)
                     this.events.on(eventName, callBack);
                     return this;
                 },
-                inReadMode: false,
                 isOpen: false,
                 pingInterval: srv.opts.pingInterval ? setInterval(function()
                 {
@@ -190,7 +189,6 @@ if(Threads.isMainThread)
             
             var id = ws.id, srv = ws.srv;
             ws.isOpen = false;
-            ws.inReadMode = false;
 
             ws.pingInterval && clearInterval(ws.pingInterval);
             ws.socket.removeAllListeners("data");
@@ -223,8 +221,9 @@ if(Threads.isMainThread)
             opts: {
                 playLoadLimit: 2 ** 27, //128 MiB
                 closeOnError:  !true,
-                closeOnUnknownOpcode: true,
-                pingInterval: 1000 * 30
+                closeOnUnknownOpcode: true, 
+                closeOnUnmaskedFrame: true, //rfc6455#section-5.1
+                pingInterval: 1000 * 30     //rfc6455#section-5.5.2
             }
         };
         
@@ -271,6 +270,7 @@ if(Threads.isMainThread)
                 delWSocket(ws);
             });
             wsServer.wsList[ws.id] = ws;
+            ws.isOpen = true;
             wsServer.events.emit("connect", [req, ws], wsServer);
         });
         return wsServer;
@@ -314,7 +314,9 @@ else //(read)worker part
             }
             
             if(opts.closeOnUnknownOpcode && opcodes.indexOf(msgReader.opcode) < 0)
-                msgReader.err = [1003, new Error("unknown opcode ("+msgReader.opcode+")")];
+                msgReader.err = [1003, new Error("unknown opcode ("+msgReader.opcode+")"), true];
+            else if(opts.closeOnUnmaskedFrame && !msgReader.mask)
+                msgReader.err = [1002, new Error("unknown opcode ("+msgReader.opcode+")"), true];
             else if(length > opts.playLoadLimit)
                 msgReader.err = [1009, new Error("message length ("+length+") > playLoadLimit ("+opts.playLoadLimit+")")];
             
@@ -322,7 +324,7 @@ else //(read)worker part
             msgReader.length = length;
         }
         
-        if(msgReader.err && (opts.closeOnError || msgReader.err[0] === 1003))
+        if(msgReader.err && (opts.closeOnError || msgReader.err[2]))
         {
             Threads.parentPort.postMessage(msgReader);
             msgReader = false;
