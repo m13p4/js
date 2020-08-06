@@ -54,7 +54,7 @@ if(Threads.isMainThread)
                         ws.isOpen = msg.data === ws.pingData;
                         ws.events.emit("pong", msg.data, ws);
                     }
-                    else ws.events.emit("data", [msg.data, msg.opcode, msg.fin], ws);
+                    else ws.events.emit("data", [msg.data, msg], ws);
                 });
             }
             setImmediate(function(a,b){a.postMessage(b);}, ws.readWorker, buff);
@@ -76,9 +76,10 @@ if(Threads.isMainThread)
             let rsv1   = "rsv1"   in opts ? opts.rsv1   : false;
             let rsv2   = "rsv2"   in opts ? opts.rsv2   : false;
             let rsv3   = "rsv3"   in opts ? opts.rsv3   : false;
-            let opcode = "opcode" in opts ? opts.opcode : 1;
             let mask   = "mask"   in opts ? opts.mask   : false;
-
+            let opcode = "opcode" in opts ? opts.opcode : Buffer.isBuffer(data)              ||
+                                                          data.buffer instanceof ArrayBuffer ||
+                                                          data instanceof Array               ?  2 : 1;
             data = Buffer.from(data);
 
             let maskKey = mask ? getRandomBytes(4) : null;
@@ -260,7 +261,7 @@ if(Threads.isMainThread)
             });
             ws.socket.on("close", function(hadError)
             {
-                delWSocket(ws, 1001, hadError);
+                delWSocket(ws, [1001, hadError]);
             });
             ws.socket.on("timeout", function()
             {
@@ -300,6 +301,9 @@ else //(read)worker part
             msgReader = {
                 opcode: data[0] & 0b1111,
                 fin:    !!(data[0] >> 7),
+                rsv1:   !!(data[0] >> 6 & 1),
+                rsv2:   !!(data[0] >> 5 & 1),
+                rsv3:   !!(data[0] >> 4 & 1),
                 mask:   !!(data[1] >> 7),
                 read:   -1
             };
