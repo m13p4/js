@@ -26,7 +26,7 @@ if(Threads.isMainThread)
             
                 ws.readWorker.on("error", function(err)
                 {
-                    ws.events.emit("error", err);
+                    ws.events.emit("error", err, ws);
                 });
                 ws.readWorker.on("exit", function()
                 {
@@ -77,10 +77,13 @@ if(Threads.isMainThread)
             let rsv2   = "rsv2"   in opts ? opts.rsv2   : false;
             let rsv3   = "rsv3"   in opts ? opts.rsv3   : false;
             let mask   = "mask"   in opts ? opts.mask   : false;
-            let opcode = "opcode" in opts ? opts.opcode : Buffer.isBuffer(data)              ||
-                                                          data.buffer instanceof ArrayBuffer ||
-                                                          data instanceof Array               ?  2 : 1;
-            data = Buffer.from(data);
+            let opcode = "opcode" in opts ? opts.opcode : data && (Buffer.isBuffer(data)           ||
+                                                          data instanceof ArrayBuffer              ||
+                                                          data instanceof SharedArrayBuffer        ||
+                                                          data.buffer instanceof ArrayBuffer       ||
+                                                          data.buffer instanceof SharedArrayBuffer ||
+                                                          data instanceof Array)                    ?  2 : 1;
+            data = Buffer.from(data || []);
 
             let maskKey = mask ? getRandomBytes(4) : null;
             let length  = data.length;             
@@ -145,6 +148,14 @@ if(Threads.isMainThread)
                     let eventList = this.list[name] || [];
                     for(let i = 0; i < eventList.length; i++)
                         setImmediate(function(a,b,c){a.apply(b,c);}, eventList[i], thisArg, args);
+                },
+                clear: function(name)
+                {
+                    setImmediate(function(t, n)
+                    {
+                        if(!n)               t.list    = {};
+                        else if(n in t.list) t.list[n] = [];
+                    }, this, name);
                 }
             };
         }
@@ -197,13 +208,16 @@ if(Threads.isMainThread)
             ws.socket.removeAllListeners("data");
             ws.socket.end();
             
-            let _s = ws.socket; setTimeout(function()
-                { _s && !_s.destroyed && _s.destroy(); }, 1000);
-            
             ws.events.emit("end", [], ws);
             ws.events.emit("close", err, ws);
             if(id in srv.wsList) delete srv.wsList[id];
-            setImmediate(function(){ws.events.list = {};});
+            setImmediate(function(){ws.events.clear();});
+            
+            let _ws = ws; setTimeout(function()
+            { 
+                _ws.socket && !_ws.socket.destroyed && _ws.socket.destroy(); 
+                for(var i in _ws) _ws[i] = null;
+            }, 1000);
         }
 
         let wsServer = {
