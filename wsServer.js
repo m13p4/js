@@ -23,15 +23,8 @@ if(Threads.isMainThread)
             if(!ws.readWorker)
             {
                 ws.readWorker = new Threads.Worker(__filename, {workerData: ws.srv.opts});
-            
-                ws.readWorker.on("error", function(err)
-                {
-                    ws.events.emit("error", err, ws);
-                });
-                ws.readWorker.on("exit", function()
-                {
-                    delete ws.readWorker;
-                });
+                ws.readWorker.on("error", function(err) { ws.events.emit("error", err, ws); });
+                ws.readWorker.on("exit", function()     { delete ws.readWorker; });
                 ws.readWorker.on("message", function(msg)
                 {
                     if(msg.err)
@@ -51,8 +44,8 @@ if(Threads.isMainThread)
                     }
                     else if(msg.opcode === 10) //pong
                     {
-                        ws.isOpen = msg.data === ws.pingData;
-                        ws.events.emit("pong", msg.data, ws);
+                        if(ws.pingData.compare(msg.data) === 0) ws.pingstate = 0;
+                        ws.events.emit("pong", [msg.data, ws.pingstate], ws);
                     }
                     else ws.events.emit("data", [msg.data, msg], ws);
                 });
@@ -61,8 +54,7 @@ if(Threads.isMainThread)
         }
         function getRandomBytes(length, asByteArray)
         {
-            length = length || 1;
-            var bytes = [], i = 0;
+            var bytes = [], i = 0; length = length || 1;
             for(; i < length; i++)
                 bytes.push(parseInt(Math.random() * 255));
 
@@ -177,39 +169,44 @@ if(Threads.isMainThread)
                     this.events.on(eventName, callBack);
                     return this;
                 },
-                isOpen: false,
+                close: function(code, reason)
+                {
+                    delWSocket(this, [code, reason]);
+                },
+                pingstate: 0,
                 pingInterval: srv.opts.pingInterval ? setInterval(function()
                 {
-                    ws.isOpen   = false;
-                    ws.pingData = parseInt(Date.now() * Math.random()).toString(36);
+                    ws.pingstate++;
+                    ws.pingData = getRandomBytes(6);
                     sendData(ws, ws.pingData, {opcode: 9});
+                    ws.events.emit("ping", [ws.pingData, ws.pingstate], ws);
                 }, srv.opts.pingInterval) : false
             };
-
+            
             return ws;
         }
-        function delWSocket(ws, err)
+        function delWSocket(ws, closeData)
         {
-            if(err)
+            if(closeData)
             {
-                let _code = err[0] && Number.isInteger(err[0]) ? err[0] : false;
-                let _err  = err[1] && err[1] instanceof Error  ? err[1] : false;
+                let _code   = closeData[0] && Number.isInteger(closeData[0]) ? closeData[0] : false;
+                let _reason = closeData[1] && closeData[1] instanceof Error  ? closeData[1].message 
+                                          : typeof closeData[1] === "string" ? closeData[1] : false;
                 
-                let closeData = Buffer.allocUnsafe((_err ? _err.message.length : 0) + (_code ? 2 : 0));
-                _code && closeData.writeUInt16BE(_code);
-                _err  && closeData.write(_err.message, _code ? 2 : 0);
-                sendData(ws, closeData, {opcode: 8});
+                let closeBuff = Buffer.allocUnsafe((_reason ? _reason.length : 0) + (_code ? 2 : 0));
+                _code   && closeBuff.writeUInt16BE(_code);
+                _reason && closeBuff.write(_reason, _code ? 2 : 0);
+                sendData(ws, closeBuff, {opcode: 8});
             }
             
             var id = ws.id, srv = ws.srv;
-            ws.isOpen = false;
 
             ws.pingInterval && clearInterval(ws.pingInterval);
-            ws.socket.removeAllListeners("data");
+            ws.socket.removeAllListeners();
             ws.socket.end();
             
             ws.events.emit("end", [], ws);
-            ws.events.emit("close", err, ws);
+            ws.events.emit("close", closeData, ws);
             if(id in srv.wsList) delete srv.wsList[id];
             setImmediate(function(){ws.events.clear();});
             
@@ -254,40 +251,27 @@ if(Threads.isMainThread)
             if(!("sec-websocket-key" in req.headers))
                 return socket.end('HTTP/1.1 403 Forbidden\r\n\r\n');
 
-            let wsAcceptKey = Crypto.createHash("sha1")
-                                    .update(req.headers["sec-websocket-key"] + WS_GUID)
-                                    .digest("base64");
-
-            socket.write("HTTP/1.1 101 Switching Protocols\r\n" 
-                          + "Upgrade: websocket\r\nConnection: Upgrade\r\n"
-                          + "Sec-WebSocket-Accept: " +  wsAcceptKey + "\r\n\r\n");
-
+            var swc = req.headers["sec-websocket-key"];
+            socket.write("HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\n"
+                          + "Connection: Upgrade\r\nSec-WebSocket-Accept: " + Crypto.createHash("sha1")
+                                                                                    .update(swc + WS_GUID)
+                                                                                    .digest("base64") + "\r\n\r\n");
             let ws = getWSocket(socket, wsServer);
 
-            ws.socket.on("data", function(buff)
+            ws.socket.on("data",  function(d) { setImmediate(readData, ws, d); });
+            ws.socket.on("close", function(e) { delWSocket(ws, [1001, e]); });
+            ws.socket.on("end",   function()  { delWSocket(ws); });
+            ws.socket.on("error", function(e)
             {
-                setImmediate(readData, ws, buff);
-            });
-            ws.socket.on("error", function(err)
-            {
-                ws.events.emit("error", err, ws);
-                wsServer.opts.closeOnError && delWSocket(ws, [1011, err]);
-            });
-            ws.socket.on("close", function(hadError)
-            {
-                delWSocket(ws, [1001, hadError]);
+                ws.events.emit("error", e, ws);
+                wsServer.opts.closeOnError && delWSocket(ws, [1011, e]);
             });
             ws.socket.on("timeout", function()
             {
                 ws.events.emit("timeout", [], ws);
                 delWSocket(ws);
             });
-            ws.socket.on("end", function()
-            {
-                delWSocket(ws);
-            });
             wsServer.wsList[ws.id] = ws;
-            ws.isOpen = true;
             wsServer.events.emit("connect", [req, ws], wsServer);
         });
         return wsServer;
@@ -319,44 +303,40 @@ else //(read)worker part
                 rsv2:   !!(data[0] >> 5 & 1),
                 rsv3:   !!(data[0] >> 4 & 1),
                 mask:   !!(data[1] >> 7),
+                length: data[1] & 0b1111111,
                 read:   -1
             };
             
-            let length = data[1] & 0b1111111;
-            if(length === 126)
-                length = data[offset++] << 8 | data[offset++];
-            else if(length === 127)
+            if(msgReader.length === 126)
+                msgReader.length = data[offset++] << 8 | data[offset++];
+            else if(msgReader.length === 127)
             {
-                length = Buffer.from(data.slice(offset, offset + 8)).readBigUInt64BE();
-                length = length < bigIntLimit ? parseInt(length) : length /*@todo: handle BigInt in following code*/;
-
-                offset += 8;
+                msgReader.length = Buffer.from(data.slice(offset, offset += 8)).readBigUInt64BE();
+                msgReader.length = msgReader.length < bigIntLimit ? parseInt(msgReader.length) : msgReader.length /*@todo: handle BigInt in following code*/;
             }
             
             if(opts.closeOnUnknownOpcode && opcodes.indexOf(msgReader.opcode) < 0)
                 msgReader.err = [1003, new Error("unknown opcode ("+msgReader.opcode+")"), true];
             else if(opts.closeOnUnmaskedFrame && !msgReader.mask)
                 msgReader.err = [1002, new Error("recieved frame is not masked"), true];
-            else if(length > opts.playLoadLimit)
-                msgReader.err = [1009, new Error("message length ("+length+") > playLoadLimit ("+opts.playLoadLimit+")")];
+            else if(msgReader.length > opts.playLoadLimit)
+                msgReader.err = [1009, new Error("message length ("+msgReader.length+") > playLoadLimit")];
+            else if(msgReader.opcode > 2 && msgReader.length > 125)
+                msgReader.err = [1002, new Error("control frame length ("+msgReader.length+") > 125")];
             
-            msgReader.data   = msgReader.err ? false : new Uint8Array(new SharedArrayBuffer(length));
-            msgReader.length = length;
+            msgReader.data = msgReader.err ? false : new Uint8Array(new SharedArrayBuffer(msgReader.length));
         }
         
         if(msgReader.err && (opts.closeOnError || msgReader.err[2]))
         {
             Threads.parentPort.postMessage(msgReader);
-            msgReader = false;
             process.exit(1);
         }
         
         if(msgReader.mask && !msgReader.maskKey && offset + 4 <= data.length)
         {
             msgReader.read    = 0;
-            msgReader.maskKey = data.slice(offset, offset + 4);
-            
-            offset += 4;
+            msgReader.maskKey = data.slice(offset, offset += 4);
         }
         else if(msgReader.read < 0 && !msgReader.mask)
             msgReader.read = 0;
