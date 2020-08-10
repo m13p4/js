@@ -117,7 +117,7 @@ if(Threads.isMainThread)
                 for(let i = 0; i < data.length; i++)    
                     data[i] = ~data[i] ^ toMask[i % 4];
             }
-            ws.socket.write(Buffer.concat([buff, data]));
+            !ws.socket.destroyed && ws.socket.write(Buffer.concat([buff, data]));
         }
         function getEventHandler()
         {
@@ -143,11 +143,8 @@ if(Threads.isMainThread)
                 },
                 clear: function(name)
                 {
-                    setImmediate(function(t, n)
-                    {
-                        if(!n)               t.list    = {};
-                        else if(n in t.list) t.list[n] = [];
-                    }, this, name);
+                    if(!name)                  this.list       = {};
+                    else if(name in this.list) this.list[name] = [];
                 }
             };
         }
