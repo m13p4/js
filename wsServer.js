@@ -10,15 +10,15 @@ const Threads = require('worker_threads');
 
 if(Threads.isMainThread)
 {
-    const Crypto = require('crypto');
-    const Types  = require('util').types;
-    
     function wSocketServer(httpServer, opts, onConnect)
     {
         if(!httpServer) throw new Error("require a http server");
         if(typeof opts === "function") onConnect = opts, opts = {};
 
+        const Crypto  = require('crypto');
+        const Types   = require('util').types;
         const WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
+        
         function readData(ws, buff)
         {
             if(!ws.readWorker)
@@ -41,12 +41,12 @@ if(Threads.isMainThread)
                     else if(msg.opcode === 9) //ping
                     {
                         sendData(ws, msg.data, {opcode: 10});
-                        ws.events.emit("ping", msg.data, ws);
+                        ws.events.emit("ping", [msg.data, ws.pingstate, msg], ws);
                     }
                     else if(msg.opcode === 10) //pong
                     {
-                        if(ws.pingData.compare(msg.data) === 0) ws.pingstate = 0;
-                        ws.events.emit("pong", [msg.data, ws.pingstate], ws);
+                        if(ws.pingData.equals(msg.data))  ws.pingstate = 0;
+                        ws.events.emit("pong", [msg.data, ws.pingstate, msg], ws);
                     }
                     else ws.events.emit("data", [msg.data, msg], ws);
                 });
@@ -64,58 +64,48 @@ if(Threads.isMainThread)
         function sendData(ws, data, opts)
         { //todo: send long messages in parts
             opts = opts || {};
-
+            
             let fin    = "fin"    in opts ? opts.fin    : true;
             let rsv1   = "rsv1"   in opts ? opts.rsv1   : false;
             let rsv2   = "rsv2"   in opts ? opts.rsv2   : false;
             let rsv3   = "rsv3"   in opts ? opts.rsv3   : false;
-            let mask   = "mask"   in opts ? opts.mask   : false;
+            let mask   = "mask"   in opts ? opts.mask   : !false;
             let opcode = "opcode" in opts ? opts.opcode : data && (Buffer.isBuffer(data) ||
                                                           Types.isAnyArrayBuffer(data)   ||
                                                           Types.isArrayBufferView(data))  ? 2 : 1;
             data = Buffer.from(data || []);
 
             let maskKey = mask ? getRandomBytes(4) : null;
-            let length  = data.length;             
-            let buff    = Buffer.from([]);
+            let length  = data.length;
+            let buff    = Buffer.allocUnsafe(length + (length < 126 ? 2 : length < 65536 ? 4 : 10) + (mask ? 4 : 0));
 
-            let tmp = fin ? 1 : 0;
-            tmp = tmp << 1 | (rsv1 ? 1 : 0);
-            tmp = tmp << 1 | (rsv2 ? 1 : 0);
-            tmp = tmp << 1 | (rsv3 ? 1 : 0);
-            tmp = tmp << 4 | opcode;
-            buff = Buffer.concat([buff, Buffer.from([tmp])]);
+            buff[0] = fin ? 1 : 0;
+            buff[0] = buff[0] << 1 | (rsv1 ? 1 : 0);
+            buff[0] = buff[0] << 1 | (rsv2 ? 1 : 0);
+            buff[0] = buff[0] << 1 | (rsv3 ? 1 : 0);
+            buff[0] = buff[0] << 4 | opcode;
 
-            tmp = mask ? 1 : 0;
-            tmp = tmp << 7 | (length < 126 ? length : length < 65536 ? 126 : 127);
-            buff = Buffer.concat([buff, Buffer.from([tmp])]);
+            buff[1] = (mask ? 1 << 7 : 0) | (length < 126 ? length : length < 65536 ? 126 : 127);
 
+            let pos = 2;
             if(length > 125)
             {
-                if(length < 65536)
-                {
-                    tmp = Buffer.allocUnsafe(2);
-                    tmp.writeUInt16BE(length);
-                }
-                else
-                {
-                    tmp = Buffer.allocUnsafe(8);
-                    tmp.writeBigUInt64BE(BigInt(length));
-                }
-                buff = Buffer.concat([buff, tmp]);
+                if(length < 65536) buff.writeUInt16BE(length, (pos += 2) - 2);
+                else               buff.writeBigUInt64BE(BigInt(length), (pos += 8) - 8);
             }
 
             if(mask)
             {
-                buff = Buffer.concat([buff, maskKey]);
+                maskKey.copy(buff, (pos += 4) - 4);
                 
-                let toMask = [];
-                for(let i = 0; i < maskKey.length; i++) 
-                    toMask.push(~maskKey[i]);
+                for(let i = 0; i < maskKey.length; i++)
+                    maskKey[i] = ~maskKey[i];
                 for(let i = 0; i < data.length; i++)    
-                    data[i] = ~data[i] ^ toMask[i % 4];
+                    buff[pos++] = ~data[i] ^ maskKey[i % 4];
             }
-            !ws.socket.destroyed && ws.socket.write(Buffer.concat([buff, data]));
+            else data.copy(buff, pos);
+            
+            !ws.socket.destroyed && ws.socket.write(buff);
         }
         function getEventHandler()
         {
@@ -348,8 +338,8 @@ else //(read)worker part
                 if(msgReader.mask) for(let i = 0; i < _data.length; i++)
                         msgReader.data[msgReader.read] = _data[i] 
                             ^ msgReader.maskKey[msgReader.read++ % 4];
-                else for(let i = 0; i < _data.length; i++)
-                        msgReader.data[msgReader.read++] = _data[i];
+                else 
+                    msgReader.data.set(_data, (msgReader.read += _data.length) - _data.length);
             }
             else msgReader.read += toReadBytes;
             
@@ -359,7 +349,7 @@ else //(read)worker part
                 msgReader   = false;
                 exitTimeOut = setTimeout(function(){process.exit();}, 1000);
             }
-            data  = data.slice(offset + toReadBytes);
+            data = data.slice(offset + toReadBytes);
         }
     });
 }
