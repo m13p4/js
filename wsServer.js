@@ -69,7 +69,7 @@ if(Threads.isMainThread)
             let rsv1   = "rsv1"   in opts ? opts.rsv1   : false;
             let rsv2   = "rsv2"   in opts ? opts.rsv2   : false;
             let rsv3   = "rsv3"   in opts ? opts.rsv3   : false;
-            let mask   = "mask"   in opts ? opts.mask   : !false;
+            let mask   = "mask"   in opts ? opts.mask   : false;
             let opcode = "opcode" in opts ? opts.opcode : data && (Buffer.isBuffer(data) ||
                                                           Types.isAnyArrayBuffer(data)   ||
                                                           Types.isArrayBufferView(data))  ? 2 : 1;
