@@ -11,6 +11,7 @@ const Threads = require('worker_threads');
 if(Threads.isMainThread)
 {
     const Crypto = require('crypto');
+    const Types  = require('util').types;
     
     function wSocketServer(httpServer, opts, onConnect)
     {
@@ -50,7 +51,7 @@ if(Threads.isMainThread)
                     else ws.events.emit("data", [msg.data, msg], ws);
                 });
             }
-            setImmediate(function(a,b){a.postMessage(b);}, ws.readWorker, buff);
+            ws.readWorker.postMessage(buff);
         }
         function getRandomBytes(length, asByteArray)
         {
@@ -69,12 +70,9 @@ if(Threads.isMainThread)
             let rsv2   = "rsv2"   in opts ? opts.rsv2   : false;
             let rsv3   = "rsv3"   in opts ? opts.rsv3   : false;
             let mask   = "mask"   in opts ? opts.mask   : false;
-            let opcode = "opcode" in opts ? opts.opcode : data && (Buffer.isBuffer(data)           ||
-                                                          data instanceof ArrayBuffer              ||
-                                                          data instanceof SharedArrayBuffer        ||
-                                                          data.buffer instanceof ArrayBuffer       ||
-                                                          data.buffer instanceof SharedArrayBuffer ||
-                                                          data instanceof Array)                    ?  2 : 1;
+            let opcode = "opcode" in opts ? opts.opcode : data && (Buffer.isBuffer(data) ||
+                                                          Types.isAnyArrayBuffer(data)   ||
+                                                          Types.isArrayBufferView(data))  ? 2 : 1;
             data = Buffer.from(data || []);
 
             let maskKey = mask ? getRandomBytes(4) : null;
@@ -248,14 +246,13 @@ if(Threads.isMainThread)
             if(!("sec-websocket-key" in req.headers))
                 return socket.end('HTTP/1.1 403 Forbidden\r\n\r\n');
 
-            var swc = req.headers["sec-websocket-key"];
-            socket.write("HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\n"
-                          + "Connection: Upgrade\r\nSec-WebSocket-Accept: " + Crypto.createHash("sha1")
-                                                                                    .update(swc + WS_GUID)
-                                                                                    .digest("base64") + "\r\n\r\n");
-            let ws = getWSocket(socket, wsServer);
+            let swa = Crypto.createHash("sha1").update(req.headers["sec-websocket-key"] + WS_GUID).digest("base64");
+            let ws  = getWSocket(socket, wsServer);
+            
+            ws.socket.write("HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\n"
+                          + "Connection: Upgrade\r\nSec-WebSocket-Accept: " + swa+ "\r\n\r\n");
 
-            ws.socket.on("data",  function(d) { setImmediate(readData, ws, d); });
+            ws.socket.on("data",  function(d) { readData(ws, d); });
             ws.socket.on("close", function(e) { delWSocket(ws, [1001, e]); });
             ws.socket.on("end",   function()  { delWSocket(ws); });
             ws.socket.on("error", function(e)
