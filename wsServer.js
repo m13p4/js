@@ -65,29 +65,41 @@ if(Threads.isMainThread)
         { //todo: send long messages in parts
             opts = opts || {};
             
-            let fin    = "fin"    in opts ? opts.fin    : true;
-            let rsv1   = "rsv1"   in opts ? opts.rsv1   : false;
-            let rsv2   = "rsv2"   in opts ? opts.rsv2   : false;
-            let rsv3   = "rsv3"   in opts ? opts.rsv3   : false;
-            let mask   = "mask"   in opts ? opts.mask   : false;
-            let opcode = "opcode" in opts ? opts.opcode : data && (Buffer.isBuffer(data) ||
-                                                          Types.isAnyArrayBuffer(data)   ||
-                                                          Types.isArrayBufferView(data))  ? 2 : 1;
-            data = Buffer.from(data || []);
-
-            let maskKey = mask ? getRandomBytes(4) : null;
-            let length  = data.length;
-            let buff    = Buffer.allocUnsafe(length + (length < 126 ? 2 : length < 65536 ? 4 : 10) + (mask ? 4 : 0));
+            if(!(typeof data === "string"      || 
+                 data instanceof Array         || 
+                 Types.isAnyArrayBuffer(data)  || 
+                 Types.isArrayBufferView(data) 
+            )) 
+                return ws.events.emit("error", [
+                    new TypeError("unsuported data type, requiere a String / "
+                                + "Array (of bytes in the range 0 – 255) / "
+                                + "ArrayBuffer / ArrayBufferView " 
+                                + "(Buffer, TypedArray, DataView, ...)"),
+                    data, opts], ws);
+            
+            var fin    = "fin"    in opts ? !!opts.fin  : true,
+                rsv1   = "rsv1"   in opts ? !!opts.rsv1 : false,
+                rsv2   = "rsv2"   in opts ? !!opts.rsv2 : false,
+                rsv3   = "rsv3"   in opts ? !!opts.rsv3 : false,
+                mask   = "mask"   in opts ? !!opts.mask : false,
+                opcode = "opcode" in opts ? opts.opcode : typeof data === "string" ? 1 : 2;
+            
+            data = !Types.isArrayBufferView(data) ? Buffer.from(data) 
+                    : Buffer.from(data.buffer, data.byteOffset, Buffer.byteLength(data));
+            
+            var length  = data.length,
+                maskKey = mask ? getRandomBytes(4) : null,
+                buff    = Buffer.allocUnsafe(length + (mask ? 4 : 0) + (length < 126 ? 2 : length < 65536 ? 4 : 10)),
+                pos     = 2;
 
             buff[0] = fin ? 1 : 0;
             buff[0] = buff[0] << 1 | (rsv1 ? 1 : 0);
             buff[0] = buff[0] << 1 | (rsv2 ? 1 : 0);
             buff[0] = buff[0] << 1 | (rsv3 ? 1 : 0);
             buff[0] = buff[0] << 4 | opcode;
-
+            
             buff[1] = (mask ? 1 << 7 : 0) | (length < 126 ? length : length < 65536 ? 126 : 127);
 
-            let pos = 2;
             if(length > 125)
             {
                 if(length < 65536) buff.writeUInt16BE(length, (pos += 2) - 2);
