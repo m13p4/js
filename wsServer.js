@@ -73,7 +73,7 @@ if(Threads.isMainThread)
                 return ws.events.emit("error", [
                     new TypeError("unsuported data type, requiere a String / "
                                 + "Array (of bytes in the range 0 – 255) / "
-                                + "ArrayBuffer / ArrayBufferView " 
+                                + "(Shared)ArrayBuffer / ArrayBufferView " 
                                 + "(Buffer, TypedArray, DataView, ...)"),
                     data, opts], ws);
             
@@ -186,11 +186,11 @@ if(Threads.isMainThread)
         {
             if(closeData)
             {
-                let _code   = closeData[0] && Number.isInteger(closeData[0]) ? closeData[0] : false;
-                let _reason = closeData[1] && closeData[1] instanceof Error  ? closeData[1].message 
-                                          : typeof closeData[1] === "string" ? closeData[1] : false;
-                
-                let closeBuff = Buffer.allocUnsafe((_reason ? _reason.length : 0) + (_code ? 2 : 0));
+                var _code   = closeData[0] && Number.isInteger(closeData[0]) ? closeData[0] : false,
+                    _reason = closeData[1] && closeData[1] instanceof Error  ? closeData[1].message 
+                                          : typeof closeData[1] === "string" ? closeData[1] : false,
+                    closeBuff = Buffer.allocUnsafe((_reason ? _reason.length : 0) + (_code ? 2 : 0));
+            
                 _code   && closeBuff.writeUInt16BE(_code);
                 _reason && closeBuff.write(_reason, _code ? 2 : 0);
                 sendData(ws, closeBuff, {opcode: 8});
