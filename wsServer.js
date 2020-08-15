@@ -75,14 +75,14 @@ if(Threads.isMainThread)
                                       + "(Shared)ArrayBuffer / ArrayBufferView " 
                                       + "(Buffer, TypedArray, DataView, ...)");
                 if(typeof data !== "undefined" && typeof data.toString === "function")
-                    ws.events.emit("error", [err, data = data.toString(), opts]);
+                    ws.events.emit("error", [err, data, opts]);
                 else
                 {
-
                     try     { ws.events.emit("error!", [err, data, opts]); }
                     catch(e){ ws.srv.events.emit("error!", [err, data, opts, ws]); }
                     return ws.srv.opts.closeOnError && closeWSocket(ws, [1011]);
                 }
+                data = data.toString();
             }
             
             var fin    = "fin"    in opts ? !!opts.fin  : true,
