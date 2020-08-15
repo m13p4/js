@@ -80,8 +80,8 @@ if(Threads.isMainThread)
                 {
                     try     { ws.events.emit("error!", [err, data, opts]); }
                     catch(e){ ws.srv.events.emit("error!", [err, data, opts, ws]); }
-                    return ws.srv.opts.closeOnError && closeWSocket(ws, [1011]);
                 }
+                if(ws.srv.opts.closeOnError) return closeWSocket(ws, [1011]);
                 data = data.toString();
             }
             
