@@ -70,7 +70,7 @@ if(Threads.isMainThread)
                  Types.isArrayBufferView(data) 
             ))
             {
-                if(data && typeof data.toString === "function")
+                if(typeof data !== "undefined" && typeof data.toString === "function")
                     data = data.toString();
                 else
                 {
