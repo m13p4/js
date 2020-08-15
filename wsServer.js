@@ -70,14 +70,14 @@ if(Threads.isMainThread)
                  Types.isArrayBufferView(data) 
             ))
             {
+                var err = new TypeError("unsuported data type, requiere a String / "
+                                      + "Array (of bytes in the range 0 – 255) / "
+                                      + "(Shared)ArrayBuffer / ArrayBufferView " 
+                                      + "(Buffer, TypedArray, DataView, ...)");
                 if(typeof data !== "undefined" && typeof data.toString === "function")
-                    data = data.toString();
+                    ws.events.emit("error", [err, data = data.toString(), opts]);
                 else
                 {
-                    var err = new TypeError("unsuported data type, requiere a String / "
-                                          + "Array (of bytes in the range 0 – 255) / "
-                                          + "(Shared)ArrayBuffer / ArrayBufferView " 
-                                          + "(Buffer, TypedArray, DataView, ...)");
 
                     try     { ws.events.emit("error!", [err, data, opts]); }
                     catch(e){ ws.srv.events.emit("error!", [err, data, opts, ws]); }
