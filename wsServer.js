@@ -74,15 +74,12 @@ if(Threads.isMainThread)
                                       + "Array (of bytes in the range 0 – 255) / "
                                       + "(Shared)ArrayBuffer / ArrayBufferView " 
                                       + "(Buffer, TypedArray, DataView, ...)");
-                if(typeof data !== "undefined" && typeof data.toString === "function")
-                    ws.events.emit("error", [err, data, opts]);
-                else
-                {
-                    try     { ws.events.emit("error!", [err, data, opts]); }
-                    catch(e){ ws.srv.events.emit("error!", [err, data, opts, ws]); }
-                }
+                
+                try     { ws.events.emit("error!", [err, data, opts]); }
+                catch(e){ ws.srv.events.emit("error", [err, data, opts, ws]); }
                 if(ws.srv.opts.closeOnError) return closeWSocket(ws, [1011]);
-                data = data.toString();
+                
+                data = ""+data;
             }
             
             var fin    = "fin"    in opts ? !!opts.fin  : true,
@@ -144,7 +141,7 @@ if(Threads.isMainThread)
                 {
                     args = args instanceof Array ? args : [args];
 
-                    let eventList = this.list[name.replace(/!*$/,"")] || [];
+                    let eventList = this.list[(""+name).replace(/!*$/,"")] || [];
                     for(var i = 0; i < eventList.length; i++)
                         setImmediate(function(a,b,c){a.apply(b,c);}, eventList[i], thisArg || this._this, args);
                     
@@ -177,14 +174,13 @@ if(Threads.isMainThread)
                 close: function(code, reason)
                 {
                     closeWSocket(this, [code, reason]);
+                    return this;
                 },
                 pingstate: 0,
                 pingInterval: srv.opts.pingInterval ? setInterval(function()
                 {
-                    ws.pingstate++;
-                    ws.pingData = getRandomBytes(6);
-                    sendData(ws, ws.pingData, {opcode: 9});
-                    ws.events.emit("ping", [ws.pingData, ws.pingstate]);
+                    sendData(ws, ws.pingData = getRandomBytes(6), {opcode: 9});
+                    ws.events.emit("ping", [ws.pingData, ++ws.pingstate]);
                 }, srv.opts.pingInterval) : false
             };
             ws.events = getEventHandler(ws);
@@ -211,7 +207,6 @@ if(Threads.isMainThread)
             ws.socket.removeAllListeners();
             ws.socket.end();
             
-            ws.events.emit("end", []);
             ws.events.emit("close", closeData);
             if(id in srv.wsList) delete srv.wsList[id];
             setImmediate(function(){ws.events.clear();});
@@ -227,9 +222,9 @@ if(Threads.isMainThread)
             httpServer: httpServer,
             wsList: {},
 
-            listen: function(port, callback)
+            listen: function(port, cb)
             {
-                this.httpServer.listen(port, callback||function(){});
+                this.httpServer.listen(port, typeof cb === "function" ? cb : function(){});
                 return this;
             },
             on: function(eventName, callBack)
@@ -238,7 +233,7 @@ if(Threads.isMainThread)
                 return this;
             },
             opts: Object.assign({
-                playLoadLimit: 2 ** 27, //128 MiB
+                playLoadLimit: 2 ** 27,     //128 MiB
                 closeOnError:  !true,
                 closeOnUnknownOpcode: true, 
                 closeOnUnmaskedFrame: true, //rfc6455#section-5.1
