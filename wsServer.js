@@ -144,6 +144,7 @@ if(Threads.isMainThread)
                     var eventList = this.list[name] || [], i = 0;
                     for(; i < eventList.length; i++)
                         setImmediate(function(a,b,c){a.apply(b,c);}, eventList[i], thisArg || this._this, args);
+                    
                     return i;
                 },
                 clear: function(name)
