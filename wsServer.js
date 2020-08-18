@@ -75,11 +75,11 @@ if(Threads.isMainThread)
                                       + "(Shared)ArrayBuffer / ArrayBufferView " 
                                       + "(Buffer, TypedArray, DataView, ...)");
                 
-                try     { ws.events.emit("error!", [err, data, opts]); }
-                catch(e){ ws.srv.events.emit("error", [err, data, opts, ws]); }
+                ws.events.emit("error", [err, data, opts]) < 1 && ws.srv.events.emit("error", [err, data, opts, ws]);
+                
                 if(ws.srv.opts.closeOnError) return closeWSocket(ws, [1011]);
                 
-                data = ""+data;
+                data = data && typeof data.toString === "function" ? data.toString() : ""+data;
             }
             
             var fin    = "fin"    in opts ? !!opts.fin  : true,
@@ -141,11 +141,10 @@ if(Threads.isMainThread)
                 {
                     args = args instanceof Array ? args : [args];
 
-                    let eventList = this.list[(""+name).replace(/!*$/,"")] || [];
-                    for(var i = 0; i < eventList.length; i++)
+                    var eventList = this.list[name] || [], i = 0;
+                    for(; i < eventList.length; i++)
                         setImmediate(function(a,b,c){a.apply(b,c);}, eventList[i], thisArg || this._this, args);
-                    
-                    if(name === "error!" && i < 1) throw args[0];
+                    return i;
                 },
                 clear: function(name)
                 {
